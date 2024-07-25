@@ -10,7 +10,7 @@ const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 const tokenDecimals = 18;
 const initialSupply = 100000000;
 const fs = require("fs");
-const burnAnimation = "https://example.com/burn.jpg"; // Replace with actual burn animation for YANG
+const burnAnimation = "https://voidonbase.com/burn.jpg";
 
 const processedTransactionsFilePath = "processed_transactions.json";
 let processedTransactions = new Set();
@@ -453,7 +453,7 @@ async function updateTotalBurnedAmount() {
   }
 }
 
-scheduleNextCall(detectYangBurnEvent, 60000);
+scheduleNextCall(detectYangBurnEvent, 30000);
 
 // Add initial 300 transactions to processed transactions set to avoid spamming the group on initial startup
 const fetchInitialUniswapTransactions = async () => {
