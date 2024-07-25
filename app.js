@@ -202,15 +202,62 @@ function getYangRank(yangBalance) {
 }
 
 function getRankImageUrl(yangRank) {
-  // Replace these URLs with actual image URLs for YANG ranks
   const rankToImageUrlMap = {
-    "YANG Peasant": "https://example.com/rank1.png",
-    "YANG Initiate": "https://example.com/rank2.png",
-    // ... (continue for all YANG ranks)
-    "YANG Ultimate": "https://example.com/rank54.png"
+    "YANG Peasant": "https://voidonbase.com/rank1.png",
+    "YANG Initiate": "https://voidonbase.com/rank2.png",
+    "YANG Learner": "https://voidonbase.com/rank3.png",
+    "YANG Rookie": "https://voidonbase.com/rank4.png",
+    "YANG Apprentice": "https://voidonbase.com/rank5.png",
+    "YANG Expert": "https://voidonbase.com/rank6.png",
+    "YANG Acolyte": "https://voidonbase.com/rank10.png",
+    "YANG Disciple": "https://voidonbase.com/rank11.png",
+    "YANG Master": "https://voidonbase.com/rank12.png",
+    "YANG Summoner": "https://voidonbase.com/rank14.png",
+    "YANG Necromancer": "https://voidonbase.com/rank15.png",
+    "YANG Seer": "https://voidonbase.com/rank16.png",
+    "YANG Enchanter": "https://voidonbase.com/rank17.png",
+    "YANG Warrior": "https://voidonbase.com/rankwar.png",
+    "YANG Sage": "https://voidonbase.com/rank18.png",
+    "YANG Shaman": "https://voidonbase.com/rank19.png",
+    "YANG Knight": "https://voidonbase.com/rank20.png",
+    "YANG Sorcerer": "https://voidonbase.com/rank21.png",
+    "YANG Warlock": "https://voidonbase.com/rank22.png",
+    "YANG Archmage": "https://voidonbase.com/rank24.png",
+    "YANG Dank Mystic": "https://voidonbase.com/420.png",
+    "YANG Archdruid": "https://voidonbase.com/rank25.png",
+    "YANG Conjurer": "https://voidonbase.com/rank26.png",
+    "YANG Clairvoyant": "https://voidonbase.com/rank27.png",
+    "YANG Alchemist": "https://voidonbase.com/rank28.png",
+    "YANG Lord": "https://voidonbase.com/rank29.png",
+    "YANG Grandmaster": "https://voidonbase.com/rankgm.png",
+    "YANG Juggernaut": "https://voidonbase.com/rankjug.png",
+    "YANG Hierophant": "https://voidonbase.com/rank30.png",
+    "YANG Creature": "https://voidonbase.com/rank32.png",
+    "YANG Overlord": "https://voidonbase.com/rank33.png",
+    "YANG Assassin": "https://voidonbase.com/assassin.png",
+    "YANG Emperor": "https://voidonbase.com/rank34.png",
+    "YANG Evoker": "https://voidonbase.com/rank35.png",
+    "YANG Harbinger": "https://voidonbase.com/rank36.png",
+    "YANG Warden": "https://voidonbase.com/rank39.png",
+    "YANG Admiral": "https://voidonbase.com/rank40.png",
+    "YANG Monarch": "https://voidonbase.com/rank41.png",
+    "YANG Sovereign": "https://voidonbase.com/rank42.png",
+    "YANG Majesty": "https://voidonbase.com/rank43.png",
+    "YANG Transcendent": "https://voidonbase.com/rank44.png",
+    "YANG Exalted": "https://voidonbase.com/rank45.png",
+    "YANG Celestial": "https://voidonbase.com/rank46.png",
+    "YANG Divine": "https://voidonbase.com/rank47.png",
+    "YANG Cosmic Blazer": "https://voidonbase.com/696969.png",
+    "YANG Apotheosis": "https://voidonbase.com/rank48.png",
+    "YANG Eternity": "https://voidonbase.com/rank49.png",
+    "YANG Omnipotence": "https://voidonbase.com/rank50.png",
+    "YANG Singularity": "https://voidonbase.com/rank51.png",
+    "YANG Absolute": "https://voidonbase.com/rank52.png",
+    "YANG Omega": "https://voidonbase.com/rank53.png",
+    "YANG Ultimate": "https://voidonbase.com/rank54.png"
   };
 
-  return rankToImageUrlMap[yangRank] || "https://example.com/rank1.png";
+  return rankToImageUrlMap[yangRank] || "https://voidonbase.com/rank1.png";
 }
 
 async function detectUniswapLatestTransaction() {
