@@ -82,7 +82,7 @@ async function reportBurn(burnedAmount) {
   const chartLink = "https://dexscreener.com/base/0x384C9c33737121c4499C85D815eA57D1291875Ab";
   const percentBurned = ((initialSupply - currentTotalSupply) / initialSupply) * 100;
   
-  const burnMessage = `YANG Burned!\n\n💀💀💀💀💀\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG\n Total Percent Burned: ${percentBurned.toFixed(2)}%\n`;
+  const burnMessage = `YANG Burned!\n\n☯️☯️☯️☯️☯️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG\n Total Percent Burned: ${percentBurned.toFixed(2)}%\n`;
 
   const burnAnimationMessageOptions = {
     caption: burnMessage,
