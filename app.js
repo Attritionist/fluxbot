@@ -7,11 +7,11 @@ const TELEGRAM_BOT_TOKEN = process.env["TELEGRAM_BOT_TOKEN"];
 const ETHERSCAN_API_KEY = process.env["ETHERSCAN_API_KEY"];
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 const tokenDecimals = 8;
-const initialSupply = 100000000;
+const initialSupply = 2481201.93166267; // Updated to match the actual supply
 const burnAnimation = "https://fluxonbase.com/burn.jpg";
 const YANG_CONTRACT_ADDRESS = '0x384C9c33737121c4499C85D815eA57D1291875Ab';
 
-let currentTotalSupply = BigInt(0);
+let currentTotalSupply = 0;
 let totalBurnedAmount = 0;
 
 const messageQueue = [];
@@ -46,22 +46,25 @@ async function sendAnimationMessage(photo, options) {
   sendBurnFromQueue();
 }
 
+function formatSupply(supply) {
+  return Number(supply) / 10**tokenDecimals;
+}
+
 async function checkTotalSupply() {
   try {
     const apiUrl = `https://api.basescan.org/api?module=stats&action=tokensupply&contractaddress=${YANG_CONTRACT_ADDRESS}&apikey=${ETHERSCAN_API_KEY}`;
     const response = await axios.get(apiUrl);
 
     if (response.data.status === "1") {
-      const newTotalSupply = BigInt(response.data.result);
+      const newTotalSupply = formatSupply(response.data.result);
       
-      if (currentTotalSupply === BigInt(0)) {
+      if (currentTotalSupply === 0) {
         currentTotalSupply = newTotalSupply;
-        console.log(`Initial total supply set to: ${currentTotalSupply}`);
+        console.log(`Initial total supply set to: ${currentTotalSupply.toFixed(8)}`);
       } else if (newTotalSupply < currentTotalSupply) {
         const burnedAmount = currentTotalSupply - newTotalSupply;
-        const burnedAmountFormatted = Number(burnedAmount) / 10**tokenDecimals;
         
-        await reportBurn(burnedAmountFormatted);
+        await reportBurn(burnedAmount);
         
         currentTotalSupply = newTotalSupply;
       }
@@ -75,9 +78,9 @@ async function checkTotalSupply() {
 
 async function reportBurn(burnedAmount) {
   const chartLink = "https://dexscreener.com/base/0x384C9c33737121c4499C85D815eA57D1291875Ab";
-  const percentBurned = ((initialSupply - Number(currentTotalSupply) / 10**tokenDecimals) / initialSupply) * 100;
+  const percentBurned = ((initialSupply - currentTotalSupply) / initialSupply) * 100;
   
-  const burnMessage = `YANG Burned!\n\n💀💀💀💀💀\n🔥 Burned: ${burnedAmount.toFixed(3)} YANG\nPercent Burned: ${percentBurned.toFixed(2)}%\n🔎 <a href="${chartLink}">Chart</a>`;
+  const burnMessage = `YANG Burned!\n\n💀💀💀💀💀\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG\nPercent Burned: ${percentBurned.toFixed(2)}%\n🔎 <a href="${chartLink}">Chart</a>`;
 
   const burnAnimationMessageOptions = {
     caption: burnMessage,
@@ -112,9 +115,9 @@ async function updateTotalBurnedAmount() {
     const response = await axios.get(apiUrl, config);
 
     if (response.data.status === "1") {
-      const currentSupply = BigInt(response.data.result);
-      totalBurnedAmount = Number(BigInt(initialSupply * 10**tokenDecimals) - currentSupply) / 10**tokenDecimals;
-      console.log(`Total burned amount updated: ${totalBurnedAmount}`);
+      const currentSupply = formatSupply(response.data.result);
+      totalBurnedAmount = initialSupply - currentSupply;
+      console.log(`Total burned amount updated: ${totalBurnedAmount.toFixed(8)}`);
     }
   } catch (error) {
     console.error("Error updating total burned amount:", error);
@@ -125,7 +128,7 @@ async function updateTotalBurnedAmount() {
 updateTotalBurnedAmount()
   .then(() => {
     console.log("Total burned amount initialized.");
-    scheduleNextCall(detectYangBurnEvent, 20000); // Check for burns every 20 seconds
+    scheduleNextCall(detectYangBurnEvent, 30000); // Check for burns every 30 seconds
   })
   .catch((error) => {
     console.error("Error during initialization:", error);
