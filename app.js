@@ -7,7 +7,7 @@ const TELEGRAM_BOT_TOKEN = process.env["TELEGRAM_BOT_TOKEN"];
 const ETHERSCAN_API_KEY = process.env["ETHERSCAN_API_KEY"];
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 const tokenDecimals = 8;
-const initialSupply = 2481201.93166267; // Updated to match the actual supply
+const initialSupply = 2500000; // Updated to 2.5M as the initial supply
 const burnAnimation = "https://fluxonbase.com/burn.jpg";
 const YANG_CONTRACT_ADDRESS = '0x384C9c33737121c4499C85D815eA57D1291875Ab';
 
@@ -64,7 +64,7 @@ async function checkTotalSupply() {
       } else if (newTotalSupply < currentTotalSupply) {
         const burnedAmount = currentTotalSupply - newTotalSupply;
         
-        await reportBurn(burnedAmount);
+        await reportBurn(burnedAmount, newTotalSupply);
         
         currentTotalSupply = newTotalSupply;
       }
@@ -76,11 +76,10 @@ async function checkTotalSupply() {
   }
 }
 
-async function reportBurn(burnedAmount) {
-  const chartLink = "https://dexscreener.com/base/0x384C9c33737121c4499C85D815eA57D1291875Ab";
-  const percentBurned = ((initialSupply - currentTotalSupply) / initialSupply) * 100;
+async function reportBurn(burnedAmount, currentSupply) {
+  const totalPercentBurned = ((initialSupply - currentSupply) / initialSupply) * 100;
   
-  const burnMessage = `YANG Burned!\n\n💀💀💀💀💀\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG\nPercent Burned: ${percentBurned.toFixed(2)}%\n🔎 <a href="${chartLink}">Chart</a>`;
+  const burnMessage = `YANG Burned!\n\n☯️☯️☯️☯️☯️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG\n🔥 Total Percent Burned: ${totalPercentBurned.toFixed(3)}%`;
 
   const burnAnimationMessageOptions = {
     caption: burnMessage,
@@ -128,7 +127,7 @@ async function updateTotalBurnedAmount() {
 updateTotalBurnedAmount()
   .then(() => {
     console.log("Total burned amount initialized.");
-    scheduleNextCall(detectYangBurnEvent, 30000); // Check for burns every 30 seconds
+    scheduleNextCall(detectYangBurnEvent, 30000); // Check for burns every 20 seconds
   })
   .catch((error) => {
     console.error("Error during initialization:", error);
