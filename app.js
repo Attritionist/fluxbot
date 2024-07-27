@@ -24,21 +24,34 @@ const initialSupply = 2500000;
 const burnAnimation = "https://fluxonbase.com/burn.jpg";
 const YANG_CONTRACT_ADDRESS = '0x384C9c33737121c4499C85D815eA57D1291875Ab';
 
-// ABI for the doBurn function
+// ABI for the doBurn and getCurrentPrice functions
 const ABI = [
- {
-  "inputs": [],
-  "name": "doBurn",
-  "outputs": [
-   {
-    "internalType": "bool",
-    "name": "_success",
-    "type": "bool"
-   }
-  ],
-  "stateMutability": "nonpayable",
-  "type": "function"
- }
+  {
+    "inputs": [],
+    "name": "doBurn",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "_success",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getCurrentPrice",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
 ];
 
 // Initialize Telegram bot
@@ -108,6 +121,18 @@ function formatSupply(supply) {
   return Number(supply) / 10**tokenDecimals;
 }
 
+async function getCurrentPrice() {
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+    const price = await contract.getCurrentPrice();
+    return (price / 10**tokenDecimals).toFixed(4);
+  } catch (error) {
+    console.error("Error getting current price:", error);
+    return null;
+  }
+}
+
 async function checkTotalSupply() {
   try {
     const apiUrl = `https://api.basescan.org/api?module=stats&action=tokensupply&contractaddress=${YANG_CONTRACT_ADDRESS}&apikey=${ETHERSCAN_API_KEY}`;
@@ -136,8 +161,9 @@ async function checkTotalSupply() {
 async function reportBurn(burnedAmount, previousTotalSupply) {
   const percentBurned = ((initialSupply - currentTotalSupply) / initialSupply) * 100;
   const newlyBurnedPercent = (burnedAmount / initialSupply) * 100;
+  const currentPrice = await getCurrentPrice();
   
-  const burnMessage = `YANG Burned!\n\n☀️☀️☀️☀️☀️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG (${newlyBurnedPercent.toFixed(4)}%)\n🔥 Total Burned: ${(initialSupply - currentTotalSupply).toFixed(8)} YANG\n🔥 Total Percent Burned: ${percentBurned.toFixed(2)}%\n`;
+  const burnMessage = `YANG Burned!\n\n☀️☀️☀️☀️☀️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG (${newlyBurnedPercent.toFixed(4)}%)\n🔥 Total Burned: ${(initialSupply - currentTotalSupply).toFixed(8)} YANG\n🔥 Total Percent Burned: ${percentBurned.toFixed(2)}%\nYANG to YIN ratio: ${currentPrice}`;
 
   const burnAnimationMessageOptions = {
     caption: burnMessage,
@@ -202,7 +228,7 @@ const scheduleHourlyBurn = () => {
 updateTotalBurnedAmount()
   .then(() => {
     console.log("Total burned amount initialized.");
-    scheduleNextCall(detectYangBurnEvent, 20000); // Check for burns every 30 seconds
+    scheduleNextCall(detectYangBurnEvent, 15000); // Check for burns every 30 seconds
     
     // Start the hourly burn schedule
     scheduleHourlyBurn();
