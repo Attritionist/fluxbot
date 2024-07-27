@@ -66,9 +66,11 @@ async function checkTotalSupply() {
       } else if (newTotalSupply < currentTotalSupply) {
         const burnedAmount = currentTotalSupply - newTotalSupply;
         
-        await reportBurn(burnedAmount);
-        
+        // Update currentTotalSupply before reporting the burn
+        const previousTotalSupply = currentTotalSupply;
         currentTotalSupply = newTotalSupply;
+        
+        await reportBurn(burnedAmount, previousTotalSupply);
       }
     } else {
       throw new Error("Failed to retrieve total supply");
@@ -78,11 +80,12 @@ async function checkTotalSupply() {
   }
 }
 
-async function reportBurn(burnedAmount) {
+async function reportBurn(burnedAmount, previousTotalSupply) {
   const chartLink = "https://dexscreener.com/base/0x384C9c33737121c4499C85D815eA57D1291875Ab";
   const percentBurned = ((initialSupply - currentTotalSupply) / initialSupply) * 100;
+  const newlyBurnedPercent = (burnedAmount / initialSupply) * 100;
   
-  const burnMessage = `YANG Burned!\n\n☯️☯️☯️☯️☯️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG\n Total Percent Burned: ${percentBurned.toFixed(2)}%\n`;
+  const burnMessage = `YANG Burned!\n\n☯️☯️☯️☯️☯️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG (${newlyBurnedPercent.toFixed(4)}%)\n🔥 Total Burned: ${(initialSupply - currentTotalSupply).toFixed(8)} YANG\n🔥 Total Percent Burned: ${percentBurned.toFixed(2)}%\n`;
 
   const burnAnimationMessageOptions = {
     caption: burnMessage,
