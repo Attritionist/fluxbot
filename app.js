@@ -19,13 +19,19 @@ const YANG_CONTRACT_ADDRESS = '0x384C9c33737121c4499C85D815eA57D1291875Ab';
 
 // ABI for the doBurn function
 const ABI = [
-  {
-    "inputs": [],
-    "name": "doBurn",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
+ {
+		"inputs": [],
+		"name": "doBurn",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "_success",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
 ];
 
 // Initialize Telegram bot
