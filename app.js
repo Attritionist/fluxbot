@@ -93,17 +93,23 @@ async function sendBurnFromQueue() {
     isSendingMessage = true;
     const message = messageQueue.shift();
     try {
+      // Ensure disable_notification is set in the options
+      message.options.disable_notification = true;
+
       const sentMessage = await bot.sendPhoto(
         TELEGRAM_CHAT_ID,
         message.photo,
         message.options
       );
+      
       // Pin the message without notification
       await bot.pinChatMessage(TELEGRAM_CHAT_ID, sentMessage.message_id, {
         disable_notification: true
       });
+
+      console.log(`[${new Date().toISOString()}] Burn message sent and pinned successfully.`);
     } catch (error) {
-      console.error("Error sending or pinning message:", error);
+      console.error(`[${new Date().toISOString()}] Error sending or pinning message:`, error);
     }
     setTimeout(() => {
       isSendingMessage = false;
@@ -111,7 +117,6 @@ async function sendBurnFromQueue() {
     }, 500);
   }
 }
-
 async function sendAnimationMessage(photo, options) {
   addToBurnQueue({ photo, options });
   sendBurnFromQueue();
