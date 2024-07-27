@@ -4,12 +4,19 @@ const ethers = require('ethers');
 require("dotenv").config();
 
 // Environment variables
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const RPC_URL = process.env.RPC_URL;
+const {
+  TELEGRAM_CHAT_ID,
+  TELEGRAM_BOT_TOKEN,
+  ETHERSCAN_API_KEY,
+  CONTRACT_ADDRESS,
+  PRIVATE_KEY,
+  RPC_URL
+} = process.env;
+
+// Check if all required environment variables are set
+if (!TELEGRAM_CHAT_ID || !TELEGRAM_BOT_TOKEN || !ETHERSCAN_API_KEY || !CONTRACT_ADDRESS || !PRIVATE_KEY || !RPC_URL) {
+  throw new Error("Missing required environment variables.");
+}
 
 // Constants
 const tokenDecimals = 8;
@@ -20,18 +27,18 @@ const YANG_CONTRACT_ADDRESS = '0x384C9c33737121c4499C85D815eA57D1291875Ab';
 // ABI for the doBurn function
 const ABI = [
  {
-		"inputs": [],
-		"name": "doBurn",
-		"outputs": [
-			{
-				"internalType": "bool",
-				"name": "_success",
-				"type": "bool"
-			}
-		],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	}
+  "inputs": [],
+  "name": "doBurn",
+  "outputs": [
+   {
+    "internalType": "bool",
+    "name": "_success",
+    "type": "bool"
+   }
+  ],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ }
 ];
 
 // Initialize Telegram bot
@@ -41,9 +48,13 @@ let currentTotalSupply = 0;
 let totalBurnedAmount = 0;
 const messageQueue = [];
 let isSendingMessage = false;
+let isBurnInProgress = false;
 
 // Hourly burn function
 async function doBurn() {
+  if (isBurnInProgress) return;
+  isBurnInProgress = true;
+
   try {
     const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
@@ -55,6 +66,8 @@ async function doBurn() {
     console.log('Transaction successful:', tx.hash);
   } catch (error) {
     console.error('Error calling doBurn:', error);
+  } finally {
+    isBurnInProgress = false;
   }
 }
 
@@ -124,7 +137,7 @@ async function reportBurn(burnedAmount, previousTotalSupply) {
   const percentBurned = ((initialSupply - currentTotalSupply) / initialSupply) * 100;
   const newlyBurnedPercent = (burnedAmount / initialSupply) * 100;
   
-  const burnMessage = `YANG Burned!\n\n☯️☯️☯️☯️☯️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG (${newlyBurnedPercent.toFixed(4)}%)\n🔥 Total Burned: ${(initialSupply - currentTotalSupply).toFixed(8)} YANG\n🔥 Total Percent Burned: ${percentBurned.toFixed(2)}%\n`;
+  const burnMessage = `YANG Burned!\n\n☀️☀️☀️☀️☀️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG (${newlyBurnedPercent.toFixed(4)}%)\n🔥 Total Burned: ${(initialSupply - currentTotalSupply).toFixed(8)} YANG\n🔥 Total Percent Burned: ${percentBurned.toFixed(2)}%\n`;
 
   const burnAnimationMessageOptions = {
     caption: burnMessage,
@@ -168,28 +181,31 @@ async function updateTotalBurnedAmount() {
   }
 }
 
+// Schedule the hourly burn 10 seconds after the start of each hour
+const scheduleHourlyBurn = () => {
+  const now = new Date();
+  // Calculate the delay until 10 seconds after the next hour
+  const delay = (60 * 60 * 1000) - (now.getMinutes() * 60 * 1000 + now.getSeconds() * 1000 + now.getMilliseconds()) + (10 * 1000);
+  
+  setTimeout(() => {
+    doBurn().then(() => {
+      console.log("Hourly burn completed");
+      scheduleHourlyBurn(); // Schedule next burn
+    }).catch(error => {
+      console.error("Error during hourly burn:", error);
+      scheduleHourlyBurn(); // Reschedule even if there was an error
+    });
+  }, delay);
+};
+
 // Initialize and start the combined script
 updateTotalBurnedAmount()
   .then(() => {
     console.log("Total burned amount initialized.");
-    scheduleNextCall(detectYangBurnEvent, 30000); // Check for burns every 30 seconds
+    scheduleNextCall(detectYangBurnEvent, 20000); // Check for burns every 30 seconds
     
-    // Schedule hourly burn
-    const scheduleHourlyBurn = () => {
-      const now = new Date();
-      const delay = 60 * 60 * 1000 - (now.getMinutes() * 60 + now.getSeconds()) * 1000 - now.getMilliseconds();
-      setTimeout(() => {
-        doBurn().then(() => {
-          console.log("Hourly burn completed");
-          scheduleHourlyBurn(); // Schedule next burn
-        }).catch(error => {
-          console.error("Error during hourly burn:", error);
-          scheduleHourlyBurn(); // Reschedule even if there was an error
-        });
-      }, delay);
-    };
-    
-    scheduleHourlyBurn(); // Start the hourly burn schedule
+    // Start the hourly burn schedule
+    scheduleHourlyBurn();
   })
   .catch((error) => {
     console.error("Error during initialization:", error);
