@@ -531,7 +531,8 @@ async function handleSwapEvent(event) {
       tokenDecimals = YIN_TOKEN_DECIMALS;
     }
 
-    if (!isYinBuy || tokenAmount.isZero() || tokenAmount.gt(0)) {
+    // Revised condition to process only YIN buys
+    if (!isYinBuy || tokenAmount.isZero() || tokenAmount.gte(0)) {
       console.log(`Skipping sell, unrelated, or zero-amount transaction`);
       return;
     }
@@ -539,16 +540,16 @@ async function handleSwapEvent(event) {
     const formattedAmount = ethers.utils.formatUnits(tokenAmount.abs(), tokenDecimals);
     console.log(`Token amount: ${formattedAmount}`);
 
-  const fluxData = await getFluxData();
-  if (!fluxData) return;
+    const fluxData = await getFluxData();
+    if (!fluxData) return;
 
-  const yangPrice = parseFloat(fluxData.yangPrice);
-  const yinAmount = parseFloat(formattedAmount);
-  const yangEquivalent = yinAmount / yangPrice;
+    const yangPrice = parseFloat(fluxData.yangPrice);
+    const yinAmount = parseFloat(formattedAmount);
+    const yangEquivalent = yinAmount / yangPrice;
 
-  // Correct market cap calculation for both YIN and YANG
-  const yangCirculatingSupply = fluxData.circulatingSupply;
-  const totalMarketCap = yangCirculatingSupply * currentYinUsdPrice * yangPrice;
+    // Correct market cap calculation for both YIN and YANG
+    const yangCirculatingSupply = fluxData.circulatingSupply;
+    const totalMarketCap = yangCirculatingSupply * currentYinUsdPrice * yangPrice;
     const existingYangBalance = await getYangBalance(fromAddress);
     const totalYangBalance = existingYangBalance + yangEquivalent;
 
