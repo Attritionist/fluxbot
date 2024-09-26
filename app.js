@@ -227,6 +227,7 @@ const YANG_ABI = [
   'function getCurrentPrice() view returns (uint256)',
 ];
 
+// Initialize Contracts
 const yangContract = new ethers.Contract(YANG_CONTRACT_ADDRESS, YANG_ABI, wallet);
 const yinToken = new ethers.Contract(YIN_CONTRACT_ADDRESS, ERC20_ABI, provider);
 const yangToken = new ethers.Contract(YANG_CONTRACT_ADDRESS, ERC20_ABI, provider);
@@ -301,11 +302,11 @@ function resetProcessedTransactions() {
 
 async function getOptimizedGasPrice() {
   try {
-    const gasPrice = await provider.getGasPrice();
-    return gasPrice.mul(110).div(100); // 110% of current gas price
+    const feeData = await provider.getFeeData();
+    return feeData.maxFeePerGas.mul(110).div(100); // 110% of current gas price
   } catch (error) {
     console.error('Error fetching gas price:', error);
-    return ethers.utils.parseUnits('0.1', 'gwei');
+    return ethers.parseUnits('0.1', 'gwei');
   }
 }
 
@@ -499,7 +500,7 @@ async function getFluxData() {
 async function getYangBalance(address) {
   try {
     const balance = await yangToken.balanceOf(address);
-    return Number(ethers.utils.formatUnits(balance, YANG_TOKEN_DECIMALS));
+    return Number(ethers.formatUnits(balance, YANG_TOKEN_DECIMALS));
   } catch (error) {
     console.error("Error fetching YANG balance:", error);
     return 0;
@@ -629,21 +630,24 @@ function initializeEventListeners() {
 
   console.log(`[${new Date().toISOString()}] Initializing event listeners with Alchemy SDK.`);
 
+  // Create the event signature using ethers v6 syntax
+  const swapEventSignature = ethers.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
+
   // Subscribe to Swap events on the YIN Pool using Alchemy's WebSocket
   alchemy.ws.on({
     address: YIN_POOL_ADDRESS,
-    topics: [ethers.utils.id("Swap(address,address,int256,int256,uint160,uint128,int24)")]
+    topics: [swapEventSignature]
   }, (log) => {
     console.log(`[${new Date().toISOString()}] Swap event detected: ${log.transactionHash}`);
     const event = {
       args: {
-        sender: log.topics[1],
-        recipient: log.topics[2],
-        amount0: log.data[0],
-        amount1: log.data[1],
-        sqrtPriceX96: log.data[2],
-        liquidity: log.data[3],
-        tick: log.data[4]
+        sender: ethers.dataSlice(log.topics[1], 12),  // Remove padding
+        recipient: ethers.dataSlice(log.topics[2], 12),  // Remove padding
+        amount0: ethers.toBigInt(log.data.slice(0, 66)),
+        amount1: ethers.toBigInt('0x' + log.data.slice(66, 130)),
+        sqrtPriceX96: ethers.toBigInt('0x' + log.data.slice(130, 194)),
+        liquidity: ethers.toBigInt('0x' + log.data.slice(194, 258)),
+        tick: ethers.toNumber(ethers.toBigInt('0x' + log.data.slice(258, 322)))
       },
       transactionHash: log.transactionHash,
       address: log.address
