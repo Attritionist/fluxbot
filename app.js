@@ -759,13 +759,14 @@ function scheduleHourlyYangBurn() {
   }, delay);
 }
 
-// Initialization Function (revised to use Alchemy SDK)
 async function initializeAndStart() {
   try {
     console.log("Initializing FLUX bot with Alchemy SDK...");
 
-    loadProcessedTransactions();
+    // Ensure provider is ready
+    await provider.ready;
 
+    loadProcessedTransactions();
     await updateYangTotalBurnedAmount();
     scheduleNextCall(checkYangTotalSupply, 30000);
     scheduleHourlyYangBurn();
