@@ -27,6 +27,7 @@ const YIN_TOKEN_DECIMALS = 8;
 const YANG_INITIAL_SUPPLY = 2500000;
 const YANG_BURN_ANIMATION = "https://fluxonbase.com/burn.jpg";
 
+
 // Initialize Telegram bot with cancellation enabled
 const yangBot = new TelegramBot(YANG_TELEGRAM_BOT_TOKEN, { 
   polling: true,
@@ -42,8 +43,10 @@ const settings = {
 // Initialize Alchemy SDK
 const alchemy = new Alchemy(settings);
 
-// Initialize provider and wallet
-const provider = alchemy.config.getProvider();
+// Use alchemy.core as the provider
+const provider = alchemy.core;
+
+// Initialize wallet
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 
 const ERC20_ABI = [
