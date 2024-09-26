@@ -501,13 +501,8 @@ async function getFluxData() {
   }
 }
 
-// Helper function to parse signed int256
-function parseSignedInt256(hex) {
-  const bigInt = ethers.toBigInt(hex);
-  const maxInt256 = 1n << 255n; // 2^255
-
-  // If the value is greater than or equal to 2^255, it's negative
-  return bigInt >= maxInt256 ? bigInt - (1n << 256n) : bigInt;
+function absBigInt(x) {
+  return x < 0n ? -x : x;
 }
 
 async function getYangBalance(address) {
@@ -570,7 +565,7 @@ async function handleSwapEvent(event) {
       console.log(`Processing Buy transaction ${txHash}: tokenAmount=${tokenAmount.toString()}`);
     }
 
-    const formattedAmount = ethers.formatUnits(tokenAmount.abs(), tokenDecimals);
+    const formattedAmount = ethers.formatUnits(absBigInt(tokenAmount), tokenDecimals);
     console.log(`Formatted Token amount: ${formattedAmount}`);
 
     const fluxData = await getFluxData();
@@ -631,7 +626,6 @@ async function handleSwapEvent(event) {
     console.error('Error in handleSwapEvent:', error);
   }
 }
-
 const iface = new ethers.Interface(UNISWAP_V3_POOL_ABI);
 const swapEventSignature = ethers.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
 
