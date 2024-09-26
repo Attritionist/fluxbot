@@ -34,11 +34,6 @@ const yangBot = new TelegramBot(YANG_TELEGRAM_BOT_TOKEN, {
   cancelTrigger: (message) => message.text === '/cancel'
 });
 
-// Alchemy SDK Configuration
-const settings = {
-  apiKey: ALCHEMY_API_KEY,
-  network: Network.BASE_MAINNET,
-};
 
 // Alchemy SDK Configuration
 const settings = {
