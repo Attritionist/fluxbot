@@ -493,6 +493,10 @@ async function getFluxData() {
     return response.data;
   } catch (error) {
     console.error("Error fetching Flux data:", error);
+    if (cachedYangPrice) {
+      console.log('Using previously cached YANG price despite the error.');
+      return { yangPrice: cachedYangPrice };
+    }
     return null;
   }
 }
@@ -507,7 +511,15 @@ async function getYangBalance(address) {
   }
 }
 
-// Update the handleSwapEvent function
+// Helper function to parse signed int256
+function parseSignedInt256(hex) {
+  const bigInt = ethers.toBigInt(hex);
+  const maxInt256 = 1n << 255n; // 2^255
+
+  // If the value is greater than or equal to 2^255, it's negative
+  return bigInt >= maxInt256 ? bigInt - (1n << 256n) : bigInt;
+}
+
 async function handleSwapEvent(event) {
   console.log(`[${new Date().toISOString()}] Processing Swap event: ${event.transactionHash}`);
 
@@ -532,8 +544,8 @@ async function handleSwapEvent(event) {
 
     const pool = new ethers.Contract(event.address, UNISWAP_V3_POOL_ABI, provider);
 
-    const amount0 = event.args.amount0;
-    const amount1 = event.args.amount1;
+    const amount0 = event.args.amount0; // Already signed BigInt
+    const amount1 = event.args.amount1; // Already signed BigInt
 
     const token0Address = await pool.token0();
     const token1Address = await pool.token1();
@@ -620,41 +632,30 @@ async function handleSwapEvent(event) {
   }
 }
 
-// Modify the initializeEventListeners function
-function initializeEventListeners() {
-  if (listenersAttached) {
-    console.log('Event listeners already attached. Skipping re-attachment.');
-    return;
-  }
+const iface = new ethers.Interface(UNISWAP_V3_POOL_ABI);
+const swapEventSignature = ethers.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
 
-  console.log(`[${new Date().toISOString()}] Initializing event listeners with Alchemy SDK.`);
-
-  const swapEventSignature = ethers.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
-
-  alchemy.ws.on({
-    address: YIN_POOL_ADDRESS,
-    topics: [swapEventSignature]
-  }, (log) => {
-    console.log(`[${new Date().toISOString()}] Swap event detected: ${log.transactionHash}`);
-    const event = {
-      args: {
-        sender: ethers.dataSlice(log.topics[1], 12),
-        recipient: ethers.dataSlice(log.topics[2], 12),
-        amount0: ethers.toBigInt(log.data.slice(0, 66)),
-        amount1: ethers.toBigInt('0x' + log.data.slice(66, 130)),
-        sqrtPriceX96: ethers.toBigInt('0x' + log.data.slice(130, 194)),
-        liquidity: ethers.toBigInt('0x' + log.data.slice(194, 258)),
-        tick: ethers.toBigInt('0x' + log.data.slice(258, 322))  // Keep as BigInt
-      },
-      transactionHash: log.transactionHash,
-      address: log.address
-    };
-    handleSwapEvent(event);
-  });
-
-  listenersAttached = true;
-  console.log('Alchemy SDK is now listening for Swap events.');
-}
+alchemy.ws.on({
+  address: YIN_POOL_ADDRESS,
+  topics: [swapEventSignature]
+}, (log) => {
+  const parsedLog = iface.parseLog(log);
+  console.log(`[${new Date().toISOString()}] Swap event detected: ${log.transactionHash}`);
+  const event = {
+    args: {
+      sender: parsedLog.args.sender,
+      recipient: parsedLog.args.recipient,
+      amount0: parsedLog.args.amount0,
+      amount1: parsedLog.args.amount1,
+      sqrtPriceX96: parsedLog.args.sqrtPriceX96,
+      liquidity: parsedLog.args.liquidity,
+      tick: parsedLog.args.tick
+    },
+    transactionHash: log.transactionHash,
+    address: log.address
+  };
+  handleSwapEvent(event);
+});
 
 
 // YANG-Specific Functions
@@ -803,19 +804,32 @@ async function initializeAndStart() {
   }
 }
 
-// Modify the graceful shutdown handlers
 process.on('SIGINT', async () => {
   console.log('Gracefully shutting down...');
-  await alchemy.ws.removeAllListeners();
-  resetProcessedTransactions();
-  process.exit();
+  try {
+    await alchemy.ws.removeAllListeners();
+    console.log('Removed all Alchemy listeners.');
+    resetProcessedTransactions();
+    console.log('Processed transactions reset.');
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(1);
+  }
 });
 
 process.on('SIGTERM', async () => {
   console.log('Gracefully shutting down...');
-  await alchemy.ws.removeAllListeners();
-  resetProcessedTransactions();
-  process.exit();
+  try {
+    await alchemy.ws.removeAllListeners();
+    console.log('Removed all Alchemy listeners.');
+    resetProcessedTransactions();
+    console.log('Processed transactions reset.');
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(1);
+  }
 });
 
 // Start the Bot
