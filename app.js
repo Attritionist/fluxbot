@@ -501,6 +501,15 @@ async function getFluxData() {
   }
 }
 
+// Helper function to parse signed int256
+function parseSignedInt256(hex) {
+  const bigInt = ethers.toBigInt(hex);
+  const maxInt256 = 1n << 255n; // 2^255
+
+  // If the value is greater than or equal to 2^255, it's negative
+  return bigInt >= maxInt256 ? bigInt - (1n << 256n) : bigInt;
+}
+
 async function getYangBalance(address) {
   try {
     const balance = await yangToken.balanceOf(address);
@@ -509,15 +518,6 @@ async function getYangBalance(address) {
     console.error("Error fetching YANG balance:", error);
     return 0;
   }
-}
-
-// Helper function to parse signed int256
-function parseSignedInt256(hex) {
-  const bigInt = ethers.toBigInt(hex);
-  const maxInt256 = 1n << 255n; // 2^255
-
-  // If the value is greater than or equal to 2^255, it's negative
-  return bigInt >= maxInt256 ? bigInt - (1n << 256n) : bigInt;
 }
 
 async function handleSwapEvent(event) {
@@ -639,24 +639,27 @@ alchemy.ws.on({
   address: YIN_POOL_ADDRESS,
   topics: [swapEventSignature]
 }, (log) => {
-  const parsedLog = iface.parseLog(log);
-  console.log(`[${new Date().toISOString()}] Swap event detected: ${log.transactionHash}`);
-  const event = {
-    args: {
-      sender: parsedLog.args.sender,
-      recipient: parsedLog.args.recipient,
-      amount0: parsedLog.args.amount0,
-      amount1: parsedLog.args.amount1,
-      sqrtPriceX96: parsedLog.args.sqrtPriceX96,
-      liquidity: parsedLog.args.liquidity,
-      tick: parsedLog.args.tick
-    },
-    transactionHash: log.transactionHash,
-    address: log.address
-  };
-  handleSwapEvent(event);
+  try {
+    const parsedLog = iface.parseLog(log);
+    console.log(`[${new Date().toISOString()}] Swap event detected: ${log.transactionHash}`);
+    const event = {
+      args: {
+        sender: parsedLog.args.sender,
+        recipient: parsedLog.args.recipient,
+        amount0: parsedLog.args.amount0,
+        amount1: parsedLog.args.amount1,
+        sqrtPriceX96: parsedLog.args.sqrtPriceX96,
+        liquidity: parsedLog.args.liquidity,
+        tick: parsedLog.args.tick
+      },
+      transactionHash: log.transactionHash,
+      address: log.address
+    };
+    handleSwapEvent(event);
+  } catch (error) {
+    console.error(`Error parsing log for transaction ${log.transactionHash}:`, error);
+  }
 });
-
 
 // YANG-Specific Functions
 async function updateYangTotalBurnedAmount() {
@@ -785,7 +788,11 @@ async function initializeAndStart() {
     scheduleNextCall(checkYangTotalSupply, 30000);
     scheduleHourlyYangBurn();
 
-    initializeEventListeners();
+    // Initialize Event Listeners
+    // Note: The event listeners are already attached above using alchemy.ws.on
+    // If you have an initializeEventListeners function, ensure it's not duplicating the listeners
+    // For now, it's commented out as it's redundant
+    // initializeEventListeners();
 
     setInterval(resetProcessedTransactions, 24 * 60 * 60 * 1000);
 
@@ -804,6 +811,7 @@ async function initializeAndStart() {
   }
 }
 
+// Graceful Shutdown Handlers
 process.on('SIGINT', async () => {
   console.log('Gracefully shutting down...');
   try {
