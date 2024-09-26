@@ -16,7 +16,9 @@ const YANG_CONTRACT_ADDRESS = process.env.YANG_CONTRACT_ADDRESS || '0x384c9c3373
 const YIN_CONTRACT_ADDRESS = process.env.YIN_CONTRACT_ADDRESS || '0xeCb36fF12cbe4710E9Be2411de46E6C180a4807f';
 const YIN_POOL_ADDRESS = process.env.YIN_POOL_ADDRESS || '0x90fbb03389061020eec7ce9a7435966363410b87';
 const FLUX_API_ENDPOINT = process.env.FLUX_API_ENDPOINT || 'https://voidapi.onrender.com/api/yang-data';
-
+let cachedYangPrice = null;
+let lastYangPriceFetchTime = 0;
+const YANG_PRICE_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
 // Constants
 const YANG_TOKEN_DECIMALS = 8;
 const YIN_TOKEN_DECIMALS = 8;
@@ -462,8 +464,17 @@ async function getYinPrice() {
 }
 
 async function getFluxData() {
+  const currentTime = Date.now();
+  if (cachedYangPrice && (currentTime - lastYangPriceFetchTime < YANG_PRICE_CACHE_DURATION)) {
+    console.log('Using cached YANG price');
+    return { yangPrice: cachedYangPrice };
+  }
+
   try {
     const response = await axios.get(FLUX_API_ENDPOINT);
+    cachedYangPrice = parseFloat(response.data.yangPrice);
+    lastYangPriceFetchTime = currentTime;
+    console.log(`Updated cached YANG price: ${cachedYangPrice}`);
     return response.data;
   } catch (error) {
     console.error("Error fetching Flux data:", error);
@@ -529,11 +540,11 @@ async function handleSwapEvent(event) {
     console.log(`Token amount: ${formattedAmount}`);
 
     const fluxData = await getFluxData();
-    if (!fluxData) return;
+  if (!fluxData) return;
 
-    const yangPrice = parseFloat(fluxData.yangPrice);
-    const yinAmount = parseFloat(formattedAmount);
-    const yangEquivalent = yinAmount / yangPrice;
+  const yangPrice = fluxData.yangPrice;
+  const yinAmount = parseFloat(formattedAmount);
+  const yangEquivalent = yinAmount / yangPrice;
 
     const existingYangBalance = await getYangBalance(fromAddress);
     const totalYangBalance = existingYangBalance + yangEquivalent;
@@ -703,7 +714,9 @@ async function checkYangTotalSupply() {
 async function reportYangBurn(burnedAmount, previousTotalSupply) {
   const percentBurned = ((YANG_INITIAL_SUPPLY - (previousTotalSupply - burnedAmount)) / YANG_INITIAL_SUPPLY) * 100;
   const newlyBurnedPercent = (burnedAmount / YANG_INITIAL_SUPPLY) * 100;
-  const currentPrice = await getCurrentYangPrice();
+  
+  const fluxData = await getFluxData();
+  const currentPrice = fluxData ? fluxData.yangPrice : await getCurrentYangPrice();
 
   const burnMessage = `YANG Burned!\n\n☀️☀️☀️☀️☀️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG (${newlyBurnedPercent.toFixed(4)}%)\n🔥 Total Burned: ${yangTotalBurnedAmount.toFixed(8)} YANG\n🔥 Percent Burned: ${percentBurned.toFixed(2)}%\n☯️ YANG to YIN ratio: ${currentPrice}`;
 
