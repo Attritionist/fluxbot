@@ -11,6 +11,7 @@
     "dotenv": "^10.0.0",
     "ethers": "^5.7.2",
     "node-telegram-bot-api": "^0.54.0",
-    "ws": "^8.5.0"
+    "ws": "^8.5.0",
+    "alchemy-sdk": "^3.4.1"
   }
 }
