@@ -18,9 +18,10 @@ const YIN_CONTRACT_ADDRESS = process.env.YIN_CONTRACT_ADDRESS || '0xeCb36fF12cbe
 const YIN_POOL_ADDRESS = process.env.YIN_POOL_ADDRESS || '0x90fbb03389061020eec7ce9a7435966363410b87';
 const FLUX_API_ENDPOINT = process.env.FLUX_API_ENDPOINT || 'https://voidapi.onrender.com/api/yang-data';
 let cachedYangPrice = null;
+let cachedCirculatingSupply = null;
+let cachedBurnedAmount = null;
 let lastYangPriceFetchTime = 0;
 const YANG_PRICE_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
-
 // Constants
 const YANG_TOKEN_DECIMALS = 8;
 const YIN_TOKEN_DECIMALS = 8;
@@ -303,12 +304,20 @@ function resetProcessedTransactions() {
 async function getOptimizedGasPrice() {
   try {
     const feeData = await provider.getFeeData();
-    return feeData.maxFeePerGas.mul(110).div(100); // 110% of current gas price
+    if (feeData.maxFeePerGas) {
+      // Calculate 110% of the current maxFeePerGas using BigInt
+      const optimizedGasPrice = feeData.maxFeePerGas * 110n / 100n;
+      return optimizedGasPrice;
+    } else {
+      // If maxFeePerGas is undefined, set a default value (e.g., 0.1 gwei)
+      return ethers.parseUnits('0.1', 'gwei'); // Returns BigInt in ethers v6
+    }
   } catch (error) {
     console.error('Error fetching gas price:', error);
-    return ethers.parseUnits('0.1', 'gwei');
+    return ethers.parseUnits('0.1', 'gwei'); // Returns BigInt in ethers v6
   }
 }
+
 
 function getFluxRank(yangBalance) {
   const FLUX_RANKS = {
@@ -480,22 +489,56 @@ async function getYinPrice() {
 
 async function getFluxData() {
   const currentTime = Date.now();
-  if (cachedYangPrice && (currentTime - lastYangPriceFetchTime < YANG_PRICE_CACHE_DURATION)) {
-    console.log('Using cached YANG price');
-    return { yangPrice: cachedYangPrice };
+  if (
+    cachedYangPrice !== null &&
+    cachedCirculatingSupply !== null &&
+    cachedBurnedAmount !== null &&
+    (currentTime - lastYangPriceFetchTime < YANG_PRICE_CACHE_DURATION)
+  ) {
+    console.log('Using cached Flux data');
+    return {
+      yangPrice: cachedYangPrice,
+      circulatingSupply: cachedCirculatingSupply,
+      burnedAmount: cachedBurnedAmount,
+    };
   }
 
   try {
     const response = await axios.get(FLUX_API_ENDPOINT);
-    cachedYangPrice = parseFloat(response.data.yangPrice);
+    // Assuming the API returns { yangPrice, circulatingSupply, burnedAmount }
+    const { yangPrice, circulatingSupply, burnedAmount } = response.data;
+
+    if (
+      yangPrice === undefined ||
+      circulatingSupply === undefined ||
+      burnedAmount === undefined
+    ) {
+      console.warn('Flux API response missing required fields.');
+      return null;
+    }
+
+    cachedYangPrice = parseFloat(yangPrice);
+    cachedCirculatingSupply = parseFloat(circulatingSupply);
+    cachedBurnedAmount = parseFloat(burnedAmount);
     lastYangPriceFetchTime = currentTime;
-    console.log(`Updated cached YANG price: ${cachedYangPrice}`);
+
+    console.log(
+      `Updated cached Flux data: yangPrice=${cachedYangPrice}, circulatingSupply=${cachedCirculatingSupply}, burnedAmount=${cachedBurnedAmount}`
+    );
     return response.data;
   } catch (error) {
-    console.error("Error fetching Flux data:", error);
-    if (cachedYangPrice) {
-      console.log('Using previously cached YANG price despite the error.');
-      return { yangPrice: cachedYangPrice };
+    console.error('Error fetching Flux data:', error);
+    if (
+      cachedYangPrice !== null &&
+      cachedCirculatingSupply !== null &&
+      cachedBurnedAmount !== null
+    ) {
+      console.log('Using previously cached Flux data despite the error.');
+      return {
+        yangPrice: cachedYangPrice,
+        circulatingSupply: cachedCirculatingSupply,
+        burnedAmount: cachedBurnedAmount,
+      };
     }
     return null;
   }
@@ -514,7 +557,6 @@ async function getYangBalance(address) {
     return 0;
   }
 }
-
 async function handleSwapEvent(event) {
   console.log(`[${new Date().toISOString()}] Processing Swap event: ${event.transactionHash}`);
 
@@ -529,7 +571,10 @@ async function handleSwapEvent(event) {
   console.log(`[${new Date().toISOString()}] Transaction ${txHash} marked as processed.`);
 
   try {
-    console.log('Received Swap event:', JSON.stringify(event, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2));
+    console.log(
+      'Received Swap event:',
+      JSON.stringify(event, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2)
+    );
 
     const txReceipt = await provider.getTransactionReceipt(txHash);
     const fromAddress = txReceipt.from;
@@ -551,15 +596,19 @@ async function handleSwapEvent(event) {
 
     if (event.address.toLowerCase() === YIN_POOL_ADDRESS.toLowerCase()) {
       isYinBuy = true;
-      tokenAmount = token0Address.toLowerCase() === YIN_CONTRACT_ADDRESS.toLowerCase() ? amount0 : amount1;
+      tokenAmount =
+        token0Address.toLowerCase() === YIN_CONTRACT_ADDRESS.toLowerCase()
+          ? amount0
+          : amount1;
       tokenDecimals = YIN_TOKEN_DECIMALS;
       console.log(`Detected YIN pool. TokenAmount: ${tokenAmount.toString()}`);
     }
 
-    // Revised condition to process only YIN buys
-    // We're assuming negative amounts are buys (tokens coming into the pool)
+    // Process only YIN buys (negative tokenAmount)
     if (!isYinBuy || tokenAmount >= 0n) {
-      console.log(`Skipping transaction ${txHash}: isYinBuy=${isYinBuy}, isSell=${tokenAmount >= 0n}`);
+      console.log(
+        `Skipping transaction ${txHash}: isYinBuy=${isYinBuy}, isSell=${tokenAmount >= 0n}`
+      );
       return;
     } else {
       console.log(`Processing Buy transaction ${txHash}: tokenAmount=${tokenAmount.toString()}`);
@@ -569,18 +618,31 @@ async function handleSwapEvent(event) {
     console.log(`Formatted Token amount: ${formattedAmount}`);
 
     const fluxData = await getFluxData();
+    console.log('Flux Data:', fluxData); // Added log
+
     if (!fluxData) {
       console.log('Flux data unavailable. Skipping further processing.');
       return;
     }
 
-    const yangPrice = parseFloat(fluxData.yangPrice);
+    const { yangPrice, circulatingSupply, burnedAmount } = fluxData;
+
+    if (
+      yangPrice === undefined ||
+      circulatingSupply === undefined ||
+      burnedAmount === undefined
+    ) {
+      console.warn('Flux data missing one or more required fields: yangPrice, circulatingSupply, burnedAmount');
+      return;
+    }
+
+    const yangPriceFloat = parseFloat(yangPrice);
     const yinAmount = parseFloat(formattedAmount);
-    const yangEquivalent = yinAmount / yangPrice;
+    const yangEquivalent = yinAmount / yangPriceFloat;
 
     // Correct market cap calculation for both YIN and YANG
-    const yangCirculatingSupply = fluxData.circulatingSupply;
-    const totalMarketCap = yangCirculatingSupply * currentYinUsdPrice * yangPrice;
+    const yangCirculatingSupply = parseFloat(circulatingSupply);
+    const totalMarketCap = yangCirculatingSupply * currentYinUsdPrice * yangPriceFloat;
     const existingYangBalance = await getYangBalance(fromAddress);
     const totalYangBalance = existingYangBalance + yangEquivalent;
 
@@ -590,22 +652,24 @@ async function handleSwapEvent(event) {
     const minimumYinUsdValue = 50;
 
     if (transactionValueUSD < minimumYinUsdValue) {
-      console.log(`Skipping low-value YIN transaction: $${transactionValueUSD.toFixed(2)}, txHash: ${txHash}`);
+      console.log(
+        `Skipping low-value YIN transaction: $${transactionValueUSD.toFixed(2)}, txHash: ${txHash}`
+      );
       return;
     }
 
     const emojiPairCount = Math.min(Math.floor(transactionValueUSD / 50), 48);
-    const emojiString = "☯️🌊".repeat(emojiPairCount);
+    const emojiString = '☯️🌊'.repeat(emojiPairCount);
 
     const txHashLink = `https://basescan.org/tx/${txHash}`;
-    const chartLink = "https://dexscreener.com/base/0xeCb36fF12cbe4710E9Be2411de46E6C180a4807f";
+    const chartLink = 'https://dexscreener.com/base/0xeCb36fF12cbe4710E9Be2411de46E6C180a4807f';
 
     const message = `${emojiString}
 💸 Bought ${yinAmount.toFixed(2)} YIN (${yangEquivalent.toFixed(2)} YANG) ($${transactionValueUSD.toFixed(2)}) (<a href="https://debank.com/profile/${fromAddress}">View Address</a>)
 ☯️ YIN Price: $${currentYinUsdPrice.toFixed(5)}
 💰 Total Market Cap (YIN + YANG): $${totalMarketCap.toFixed(0)}
-🔥 Total Burned: ${fluxData.burnedAmount} YANG
-🔥 Percent Burned: ${(parseFloat(fluxData.burnedAmount) / YANG_INITIAL_SUPPLY * 100).toFixed(3)}%
+🔥 Total Burned: ${burnedAmount} YANG
+🔥 Percent Burned: ${(burnedAmount / YANG_INITIAL_SUPPLY * 100).toFixed(3)}%
 <a href="${chartLink}">📈 Chart</a>
 <a href="${txHashLink}">💱 TX Hash</a>
 ⚖️ Total YANG Balance: ${totalYangBalance.toFixed(2)}
@@ -613,7 +677,7 @@ async function handleSwapEvent(event) {
 
     const messageOptions = {
       caption: message,
-      parse_mode: "HTML",
+      parse_mode: 'HTML',
     };
 
     console.log('Sending FLUX photo message...');
@@ -621,11 +685,17 @@ async function handleSwapEvent(event) {
     sendYangMessageFromQueue();
     console.log('FLUX photo message added to queue.');
 
-    console.log(`FLUX Buy detected: ${yinAmount.toFixed(2)} YIN (${yangEquivalent.toFixed(2)} YANG) ($${transactionValueUSD.toFixed(2)}), From Address: ${fromAddress}`);
+    console.log(
+      `FLUX Buy detected: ${yinAmount.toFixed(2)} YIN (${yangEquivalent.toFixed(2)} YANG) ($${transactionValueUSD.toFixed(
+        2
+      )}), From Address: ${fromAddress}`
+    );
   } catch (error) {
     console.error('Error in handleSwapEvent:', error);
   }
 }
+
+
 const iface = new ethers.Interface(UNISWAP_V3_POOL_ABI);
 const swapEventSignature = ethers.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
 
@@ -671,25 +741,29 @@ async function updateYangTotalBurnedAmount() {
   }
 }
 
-// Update the doBurnWithRetry function
 async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000) {
   let retries = 0;
   while (retries < maxRetries) {
     try {
-      console.log('Calling YANG doBurn function...');
+      console.log('Estimating gas for YANG doBurn...');
+      const gasEstimate = await yangContract.estimateGas.doBurn();
+      console.log(`Estimated gas: ${gasEstimate.toString()}`);
 
       const optimizedGasPrice = await getOptimizedGasPrice();
+      console.log(`Optimized Gas Price: ${optimizedGasPrice.toString()}`);
 
-      const tx = await yangContract.doBurn({ maxFeePerGas: optimizedGasPrice });
-      await tx.wait();
-      console.log('YANG burn transaction successful:', tx.hash);
+      console.log('Sending YANG doBurn transaction...');
+      const tx = await yangContract.doBurn({ gasLimit: gasEstimate, maxFeePerGas: optimizedGasPrice });
+      console.log(`Transaction sent: ${tx.hash}. Waiting for confirmation...`);
+      const receipt = await tx.wait(2); // Wait for 2 confirmations
+      console.log('YANG burn transaction successful:', receipt.transactionHash);
       return;
     } catch (error) {
       console.error(`Error calling YANG doBurn (attempt ${retries + 1}):`, error.message);
       if (error.message.includes('network block skew detected')) {
-        const delay = initialDelay * Math.pow(2, retries);
+        const delay = initialDelay * BigInt(Math.pow(2, retries));
         console.log(`Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, Number(delay)));
         retries++;
       } else {
         throw error;
@@ -698,6 +772,7 @@ async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000) {
   }
   throw new Error('Max retries reached for YANG doBurn');
 }
+
 
 async function getCurrentYangPrice() {
   try {
@@ -781,12 +856,6 @@ async function initializeAndStart() {
     await updateYangTotalBurnedAmount();
     scheduleNextCall(checkYangTotalSupply, 30000);
     scheduleHourlyYangBurn();
-
-    // Initialize Event Listeners
-    // Note: The event listeners are already attached above using alchemy.ws.on
-    // If you have an initializeEventListeners function, ensure it's not duplicating the listeners
-    // For now, it's commented out as it's redundant
-    // initializeEventListeners();
 
     setInterval(resetProcessedTransactions, 24 * 60 * 60 * 1000);
 
