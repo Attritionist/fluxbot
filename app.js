@@ -3,7 +3,7 @@ const TelegramBot = require("node-telegram-bot-api");
 const ethers = require('ethers');
 const fs = require('fs');
 require("dotenv").config();
-const { Alchemy, Network } = require("@alch/alchemy-sdk");
+const { Alchemy, Network } = require("alchemy-sdk");
 
 // Environment variables
 const YANG_TELEGRAM_CHAT_ID = process.env.YANG_TELEGRAM_CHAT_ID;
