@@ -40,6 +40,12 @@ const settings = {
   network: Network.BASE_MAINNET,
 };
 
+// Alchemy SDK Configuration
+const settings = {
+  apiKey: ALCHEMY_API_KEY,
+  network: Network.BASE_MAINNET,
+};
+
 // Initialize Alchemy SDK
 const alchemy = new Alchemy(settings);
 
@@ -222,17 +228,14 @@ const UNISWAP_V3_POOL_ABI = [
 ];
 
 const YANG_ABI = [
-  'function doBurn() nonpayable returns (bool)',
+  'function doBurn() external returns (bool)',
   'function getCurrentPrice() view returns (uint256)',
 ];
 
-
-// Initialize Contracts
 const yangContract = new ethers.Contract(YANG_CONTRACT_ADDRESS, YANG_ABI, wallet);
 const yinToken = new ethers.Contract(YIN_CONTRACT_ADDRESS, ERC20_ABI, provider);
 const yangToken = new ethers.Contract(YANG_CONTRACT_ADDRESS, ERC20_ABI, provider);
-// Initialize YIN Pool Contract
-const yinPool = new ethers.Contract(YIN_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, provider);
+const yinPool = new ethers.Contract(YIN_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, wsProvider);
 
 // State Variables
 let yangTotalBurnedAmount = 0;
@@ -631,14 +634,26 @@ function initializeEventListeners() {
 
   console.log(`[${new Date().toISOString()}] Initializing event listeners with Alchemy SDK.`);
 
-  // Subscribe to Swap events on the YIN Pool
-  yinPool.on('Swap', (sender, recipient, amount0, amount1, sqrtPriceX96, liquidity, tick, event) => {
-    console.log(`[${new Date().toISOString()}] Swap event detected: ${event.transactionHash}`);
-    handleSwapEvent({
-      args: { sender, recipient, amount0, amount1, sqrtPriceX96, liquidity, tick },
-      transactionHash: event.transactionHash,
-      address: event.address
-    });
+  // Subscribe to Swap events on the YIN Pool using Alchemy's WebSocket
+  alchemy.ws.on({
+    address: YIN_POOL_ADDRESS,
+    topics: [ethers.utils.id("Swap(address,address,int256,int256,uint160,uint128,int24)")]
+  }, (log) => {
+    console.log(`[${new Date().toISOString()}] Swap event detected: ${log.transactionHash}`);
+    const event = {
+      args: {
+        sender: log.topics[1],
+        recipient: log.topics[2],
+        amount0: log.data[0],
+        amount1: log.data[1],
+        sqrtPriceX96: log.data[2],
+        liquidity: log.data[3],
+        tick: log.data[4]
+      },
+      transactionHash: log.transactionHash,
+      address: log.address
+    };
+    handleSwapEvent(event);
   });
 
   listenersAttached = true;
@@ -790,22 +805,20 @@ async function initializeAndStart() {
   }
 }
 
+// Modify the graceful shutdown handlers
+process.on('SIGINT', async () => {
+  console.log('Gracefully shutting down...');
+  await alchemy.ws.removeAllListeners();
+  resetProcessedTransactions();
+  process.exit();
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Gracefully shutting down...');
+  await alchemy.ws.removeAllListeners();
+  resetProcessedTransactions();
+  process.exit();
+});
+
 // Start the Bot
 initializeAndStart();
-
-// Graceful Shutdown (unchanged)
-process.on('SIGINT', () => {
-  console.log('Gracefully shutting down...');
-  // Alchemy SDK handles WebSocket connections internally, no need to destroy
-  // Reset processed transactions before shutdown
-  resetProcessedTransactions();
-  process.exit();
-});
-
-process.on('SIGTERM', () => {
-  console.log('Gracefully shutting down...');
-  // Alchemy SDK handles WebSocket connections internally, no need to destroy
-  // Reset processed transactions before shutdown
-  resetProcessedTransactions();
-  process.exit();
-});
