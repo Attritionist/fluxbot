@@ -507,7 +507,7 @@ async function getYangBalance(address) {
   }
 }
 
-// Swap Event Handler (revised with enhanced logging)
+// Update the handleSwapEvent function
 async function handleSwapEvent(event) {
   console.log(`[${new Date().toISOString()}] Processing Swap event: ${event.transactionHash}`);
 
@@ -550,14 +550,14 @@ async function handleSwapEvent(event) {
     }
 
     // Revised condition to process only YIN buys
-    if (!isYinBuy || tokenAmount.isZero() || tokenAmount.gte(0)) {
-      console.log(`Skipping transaction ${txHash}: isYinBuy=${isYinBuy}, isZero=${tokenAmount.isZero()}, isSell=${tokenAmount.gte(0)}`);
+    if (!isYinBuy || tokenAmount === 0n || tokenAmount > 0n) {
+      console.log(`Skipping transaction ${txHash}: isYinBuy=${isYinBuy}, isZero=${tokenAmount === 0n}, isSell=${tokenAmount > 0n}`);
       return;
     } else {
       console.log(`Processing Buy transaction ${txHash}: tokenAmount=${tokenAmount.toString()}`);
     }
 
-    const formattedAmount = ethers.utils.formatUnits(tokenAmount.abs(), tokenDecimals);
+    const formattedAmount = ethers.formatUnits(tokenAmount.abs(), tokenDecimals);
     console.log(`Formatted Token amount: ${formattedAmount}`);
 
     const fluxData = await getFluxData();
@@ -581,14 +581,12 @@ async function handleSwapEvent(event) {
     const transactionValueUSD = yinAmount * currentYinUsdPrice;
     const minimumYinUsdValue = 50;
 
-    // Already marked as processed above
-
     if (transactionValueUSD < minimumYinUsdValue) {
       console.log(`Skipping low-value YIN transaction: $${transactionValueUSD.toFixed(2)}, txHash: ${txHash}`);
       return;
     }
 
-    const emojiPairCount = Math.min(Math.floor(transactionValueUSD / 100), 48);
+    const emojiPairCount = Math.min(Math.floor(transactionValueUSD / 50), 48);
     const emojiString = "☯️🌊".repeat(emojiPairCount);
 
     const txHashLink = `https://basescan.org/tx/${txHash}`;
@@ -675,6 +673,7 @@ async function updateYangTotalBurnedAmount() {
   }
 }
 
+// Update the doBurnWithRetry function
 async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000) {
   let retries = 0;
   while (retries < maxRetries) {
@@ -683,7 +682,7 @@ async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000) {
 
       const optimizedGasPrice = await getOptimizedGasPrice();
 
-      const tx = await yangContract.doBurn({ gasPrice: optimizedGasPrice });
+      const tx = await yangContract.doBurn({ maxFeePerGas: optimizedGasPrice });
       await tx.wait();
       console.log('YANG burn transaction successful:', tx.hash);
       return;
