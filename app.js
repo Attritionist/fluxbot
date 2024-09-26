@@ -32,8 +32,8 @@ const yangBot = new TelegramBot(YANG_TELEGRAM_BOT_TOKEN, { polling: true });
 
 // Alchemy SDK Configuration
 const settings = {
-  apiKey: 'N1aYzXgQzBPU9vUAP_HCdUR03cZY40BN', // Alchemy API Key
-  network: Network.BASE_MAINNET, // Replace with your network
+  apiKey: process.env.ALCHEMY_API_KEY,
+  network: Network.BASE_MAINNET,
 };
 
 // Initialize Alchemy SDK
