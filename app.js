@@ -539,15 +539,16 @@ async function handleSwapEvent(event) {
     const formattedAmount = ethers.utils.formatUnits(tokenAmount.abs(), tokenDecimals);
     console.log(`Token amount: ${formattedAmount}`);
 
-   const fluxData = await getFluxData();
+  const fluxData = await getFluxData();
   if (!fluxData) return;
 
   const yangPrice = parseFloat(fluxData.yangPrice);
   const yinAmount = parseFloat(formattedAmount);
   const yangEquivalent = yinAmount / yangPrice;
 
-  // Adjust the market cap calculation
-  const adjustedMarketCap = (fluxData.circulatingSupply * currentYinUsdPrice) / yangPrice;
+  // Correct market cap calculation for both YIN and YANG
+  const yangCirculatingSupply = fluxData.circulatingSupply;
+  const totalMarketCap = yangCirculatingSupply * currentYinUsdPrice * yangPrice;
     const existingYangBalance = await getYangBalance(fromAddress);
     const totalYangBalance = existingYangBalance + yangEquivalent;
 
@@ -570,10 +571,10 @@ async function handleSwapEvent(event) {
     const txHashLink = `https://basescan.org/tx/${txHash}`;
     const chartLink = "https://dexscreener.com/base/0xeCb36fF12cbe4710E9Be2411de46E6C180a4807f";
 
-     const message = `${emojiString}
+    const message = `${emojiString}
 💸 Bought ${yinAmount.toFixed(2)} YIN (${yangEquivalent.toFixed(2)} YANG) ($${transactionValueUSD.toFixed(2)}) (<a href="https://debank.com/profile/${fromAddress}">View Address</a>)
 ☯️ YIN Price: $${currentYinUsdPrice.toFixed(5)}
-💰 Market Cap: $${adjustedMarketCap.toFixed(0)}
+💰 Total Market Cap (YIN + YANG): $${totalMarketCap.toFixed(0)}
 🔥 Total Burned: ${fluxData.burnedAmount} YANG
 🔥 Percent Burned: ${(parseFloat(fluxData.burnedAmount) / YANG_INITIAL_SUPPLY * 100).toFixed(3)}%
 <a href="${chartLink}">📈 Chart</a>
