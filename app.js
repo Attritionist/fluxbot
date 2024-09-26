@@ -622,7 +622,7 @@ async function handleSwapEvent(event) {
   }
 }
 
-// WebSocket Initialization using Alchemy SDK
+// Modify the initializeEventListeners function
 function initializeEventListeners() {
   if (listenersAttached) {
     console.log('Event listeners already attached. Skipping re-attachment.');
@@ -766,15 +766,12 @@ async function initializeAndStart() {
   try {
     console.log("Initializing FLUX bot with Alchemy SDK...");
 
-    // Ensure provider is ready
-    await provider.ready;
-
     loadProcessedTransactions();
     await updateYangTotalBurnedAmount();
     scheduleNextCall(checkYangTotalSupply, 30000);
     scheduleHourlyYangBurn();
 
-    initializeEventListeners(); // Use Alchemy's event listeners
+    initializeEventListeners();
 
     setInterval(resetProcessedTransactions, 24 * 60 * 60 * 1000);
 
