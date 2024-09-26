@@ -550,8 +550,9 @@ async function handleSwapEvent(event) {
     }
 
     // Revised condition to process only YIN buys
-    if (!isYinBuy || tokenAmount === 0n || tokenAmount > 0n) {
-      console.log(`Skipping transaction ${txHash}: isYinBuy=${isYinBuy}, isZero=${tokenAmount === 0n}, isSell=${tokenAmount > 0n}`);
+    // We're assuming negative amounts are buys (tokens coming into the pool)
+    if (!isYinBuy || tokenAmount >= 0n) {
+      console.log(`Skipping transaction ${txHash}: isYinBuy=${isYinBuy}, isSell=${tokenAmount >= 0n}`);
       return;
     } else {
       console.log(`Processing Buy transaction ${txHash}: tokenAmount=${tokenAmount.toString()}`);
@@ -619,6 +620,7 @@ async function handleSwapEvent(event) {
   }
 }
 
+// Modify the initializeEventListeners function
 function initializeEventListeners() {
   if (listenersAttached) {
     console.log('Event listeners already attached. Skipping re-attachment.');
@@ -627,10 +629,8 @@ function initializeEventListeners() {
 
   console.log(`[${new Date().toISOString()}] Initializing event listeners with Alchemy SDK.`);
 
-  // Create the event signature using ethers v6 syntax
   const swapEventSignature = ethers.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
 
-  // Subscribe to Swap events on the YIN Pool using Alchemy's WebSocket
   alchemy.ws.on({
     address: YIN_POOL_ADDRESS,
     topics: [swapEventSignature]
@@ -638,13 +638,13 @@ function initializeEventListeners() {
     console.log(`[${new Date().toISOString()}] Swap event detected: ${log.transactionHash}`);
     const event = {
       args: {
-        sender: ethers.dataSlice(log.topics[1], 12),  // Remove padding
-        recipient: ethers.dataSlice(log.topics[2], 12),  // Remove padding
+        sender: ethers.dataSlice(log.topics[1], 12),
+        recipient: ethers.dataSlice(log.topics[2], 12),
         amount0: ethers.toBigInt(log.data.slice(0, 66)),
         amount1: ethers.toBigInt('0x' + log.data.slice(66, 130)),
         sqrtPriceX96: ethers.toBigInt('0x' + log.data.slice(130, 194)),
         liquidity: ethers.toBigInt('0x' + log.data.slice(194, 258)),
-        tick: parseInt(log.data.slice(258, 322), 16)  // Parse as integer instead of using toBigInt
+        tick: ethers.toBigInt('0x' + log.data.slice(258, 322))  // Keep as BigInt
       },
       transactionHash: log.transactionHash,
       address: log.address
