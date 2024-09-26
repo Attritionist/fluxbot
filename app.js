@@ -3,6 +3,7 @@ const TelegramBot = require("node-telegram-bot-api");
 const ethers = require('ethers');
 const fs = require('fs');
 require("dotenv").config();
+const { Alchemy, Network } = require("@alch/alchemy-sdk");
 
 // Environment variables
 const YANG_TELEGRAM_CHAT_ID = process.env.YANG_TELEGRAM_CHAT_ID;
@@ -11,7 +12,7 @@ const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 const COINGECKO_API = process.env.COINGECKO_API;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const RPC_URL = process.env.RPC_URL || 'https://mainnet.base.org';
-const WSS_ENDPOINT = process.env.WSS_ENDPOINT;
+const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY; // New
 const YANG_CONTRACT_ADDRESS = process.env.YANG_CONTRACT_ADDRESS || '0x384c9c33737121c4499c85d815ea57d1291875ab';
 const YIN_CONTRACT_ADDRESS = process.env.YIN_CONTRACT_ADDRESS || '0xeCb36fF12cbe4710E9Be2411de46E6C180a4807f';
 const YIN_POOL_ADDRESS = process.env.YIN_POOL_ADDRESS || '0x90fbb03389061020eec7ce9a7435966363410b87';
@@ -19,6 +20,7 @@ const FLUX_API_ENDPOINT = process.env.FLUX_API_ENDPOINT || 'https://voidapi.onre
 let cachedYangPrice = null;
 let lastYangPriceFetchTime = 0;
 const YANG_PRICE_CACHE_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 // Constants
 const YANG_TOKEN_DECIMALS = 8;
 const YIN_TOKEN_DECIMALS = 8;
@@ -28,8 +30,17 @@ const YANG_BURN_ANIMATION = "https://fluxonbase.com/burn.jpg";
 // Initialize Telegram bot
 const yangBot = new TelegramBot(YANG_TELEGRAM_BOT_TOKEN, { polling: true });
 
-// Initialize providers and contracts
-const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+// Alchemy SDK Configuration
+const settings = {
+  apiKey: 'N1aYzXgQzBPU9vUAP_HCdUR03cZY40BN', // Alchemy API Key
+  network: Network.BASE_MAINNET, // Replace with your network
+};
+
+// Initialize Alchemy SDK
+const alchemy = new Alchemy(settings);
+
+// Initialize Providers and Contracts with Alchemy's provider
+const provider = alchemy.config.getProvider(); // Alchemy's Ethers.js provider
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 const ERC20_ABI = [
   {
@@ -208,10 +219,13 @@ const YANG_ABI = [
   'function getCurrentPrice() view returns (uint256)',
 ];
 
+
 // Initialize Contracts
 const yangContract = new ethers.Contract(YANG_CONTRACT_ADDRESS, YANG_ABI, wallet);
 const yinToken = new ethers.Contract(YIN_CONTRACT_ADDRESS, ERC20_ABI, provider);
 const yangToken = new ethers.Contract(YANG_CONTRACT_ADDRESS, ERC20_ABI, provider);
+// Initialize YIN Pool Contract
+const yinPool = new ethers.Contract(YIN_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, provider);
 
 // State Variables
 let yangTotalBurnedAmount = 0;
@@ -220,11 +234,6 @@ const yangMessageQueue = [];
 let isYangSendingMessage = false;
 const processedTransactionsFilePath = "processed_transactions.json";
 let processedTransactions = new Set();
-
-// Initialize a global WebSocket provider variable to ensure only one instance exists
-let wsProvider = null;
-
-// Flag to prevent multiple event listener attachments
 let listenersAttached = false;
 
 // Utility Functions
@@ -492,8 +501,10 @@ async function getYangBalance(address) {
   }
 }
 
-// Swap Event Handler
+// Swap Event Handler (revised with enhanced logging)
 async function handleSwapEvent(event) {
+  console.log(`[${new Date().toISOString()}] Processing Swap event: ${event.transactionHash}`);
+
   const txHash = event.transactionHash;
 
   if (processedTransactions.has(txHash)) {
@@ -529,19 +540,25 @@ async function handleSwapEvent(event) {
       isYinBuy = true;
       tokenAmount = token0Address.toLowerCase() === YIN_CONTRACT_ADDRESS.toLowerCase() ? amount0 : amount1;
       tokenDecimals = YIN_TOKEN_DECIMALS;
+      console.log(`Detected YIN pool. TokenAmount: ${tokenAmount.toString()}`);
     }
 
     // Revised condition to process only YIN buys
     if (!isYinBuy || tokenAmount.isZero() || tokenAmount.gte(0)) {
-      console.log(`Skipping sell, unrelated, or zero-amount transaction`);
+      console.log(`Skipping transaction ${txHash}: isYinBuy=${isYinBuy}, isZero=${tokenAmount.isZero()}, isSell=${tokenAmount.gte(0)}`);
       return;
+    } else {
+      console.log(`Processing Buy transaction ${txHash}: tokenAmount=${tokenAmount.toString()}`);
     }
 
     const formattedAmount = ethers.utils.formatUnits(tokenAmount.abs(), tokenDecimals);
-    console.log(`Token amount: ${formattedAmount}`);
+    console.log(`Formatted Token amount: ${formattedAmount}`);
 
     const fluxData = await getFluxData();
-    if (!fluxData) return;
+    if (!fluxData) {
+      console.log('Flux data unavailable. Skipping further processing.');
+      return;
+    }
 
     const yangPrice = parseFloat(fluxData.yangPrice);
     const yinAmount = parseFloat(formattedAmount);
@@ -558,8 +575,7 @@ async function handleSwapEvent(event) {
     const transactionValueUSD = yinAmount * currentYinUsdPrice;
     const minimumYinUsdValue = 50;
 
-    // Mark the transaction as processed regardless of its value
-    markTransactionAsProcessed(txHash);
+    // Already marked as processed above
 
     if (transactionValueUSD < minimumYinUsdValue) {
       console.log(`Skipping low-value YIN transaction: $${transactionValueUSD.toFixed(2)}, txHash: ${txHash}`);
@@ -599,45 +615,27 @@ async function handleSwapEvent(event) {
   }
 }
 
-// WebSocket Initialization Function
-function initializeWebSocket() {
+// WebSocket Initialization using Alchemy SDK
+function initializeEventListeners() {
   if (listenersAttached) {
     console.log('Event listeners already attached. Skipping re-attachment.');
     return;
   }
 
-  if (wsProvider) {
-    wsProvider.removeAllListeners();
-    wsProvider.destroy();
-    console.log('Existing WebSocket provider destroyed.');
-  }
+  console.log(`[${new Date().toISOString()}] Initializing event listeners with Alchemy SDK.`);
 
-  console.log(`[${new Date().toISOString()}] Initializing new WebSocket provider.`);
-  wsProvider = new ethers.providers.WebSocketProvider(WSS_ENDPOINT);
-
-  const yinPool = new ethers.Contract(YIN_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, wsProvider);
-
-  const swapHandler = (sender, recipient, amount0, amount1, sqrtPriceX96, liquidity, tick, event) => {
+  // Subscribe to Swap events on the YIN Pool
+  yinPool.on('Swap', (sender, recipient, amount0, amount1, sqrtPriceX96, liquidity, tick, event) => {
+    console.log(`[${new Date().toISOString()}] Swap event detected: ${event.transactionHash}`);
     handleSwapEvent({
       args: { sender, recipient, amount0, amount1, sqrtPriceX96, liquidity, tick },
       transactionHash: event.transactionHash,
       address: event.address
     });
-  };
-
-  yinPool.on('Swap', swapHandler);
+  });
 
   listenersAttached = true;
-  console.log('WebSocket connection established and listening for Swap events.');
-
-  wsProvider.on('error', (error) => {
-    console.error('WebSocket encountered an error:', error);
-  });
-
-  wsProvider.on('close', (code) => {
-    console.error(`WebSocket connection closed with code ${code}. Ethers.js will attempt to reconnect automatically.`);
-    listenersAttached = false;
-  });
+  console.log('Alchemy SDK is now listening for Swap events.');
 }
 
 // YANG-Specific Functions
@@ -757,10 +755,10 @@ function scheduleHourlyYangBurn() {
   }, delay);
 }
 
-// Initialization Function
+// Initialization Function (revised to use Alchemy SDK)
 async function initializeAndStart() {
   try {
-    console.log("Initializing FLUX bot...");
+    console.log("Initializing FLUX bot with Alchemy SDK...");
 
     loadProcessedTransactions();
 
@@ -768,7 +766,7 @@ async function initializeAndStart() {
     scheduleNextCall(checkYangTotalSupply, 30000);
     scheduleHourlyYangBurn();
 
-    initializeWebSocket();
+    initializeEventListeners(); // Use Alchemy's event listeners
 
     setInterval(resetProcessedTransactions, 24 * 60 * 60 * 1000);
 
@@ -780,7 +778,7 @@ async function initializeAndStart() {
       }
     }, 60000);
 
-    console.log("FLUX bot started successfully!");
+    console.log("FLUX bot started successfully with Alchemy SDK!");
   } catch (error) {
     console.error("Error during initialization:", error);
     setTimeout(initializeAndStart, 60000);
@@ -790,13 +788,10 @@ async function initializeAndStart() {
 // Start the Bot
 initializeAndStart();
 
-// Graceful Shutdown
+// Graceful Shutdown (unchanged)
 process.on('SIGINT', () => {
   console.log('Gracefully shutting down...');
-  if (wsProvider) {
-    wsProvider.removeAllListeners();
-    wsProvider.destroy();
-  }
+  // Alchemy SDK handles WebSocket connections internally, no need to destroy
   // Reset processed transactions before shutdown
   resetProcessedTransactions();
   process.exit();
@@ -804,14 +799,8 @@ process.on('SIGINT', () => {
 
 process.on('SIGTERM', () => {
   console.log('Gracefully shutting down...');
-  if (wsProvider) {
-    wsProvider.removeAllListeners();
-    wsProvider.destroy();
-  }
+  // Alchemy SDK handles WebSocket connections internally, no need to destroy
   // Reset processed transactions before shutdown
   resetProcessedTransactions();
   process.exit();
 });
-
-
-
