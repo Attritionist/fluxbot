@@ -1,15 +1,16 @@
 {
-  "name": "yang-burn-and-monitor",
+  "name": "yang-bot",
   "version": "1.0.0",
-  "description": "Script to perform hourly burns and monitor YANG token burns",
+  "description": "YANG Telegram bot with improved buybot functionality",
   "main": "app.js",
   "scripts": {
     "start": "node app.js"
   },
   "dependencies": {
     "axios": "^0.21.1",
-    "node-telegram-bot-api": "^0.54.0",
+    "dotenv": "^10.0.0",
     "ethers": "^5.7.2",
-    "dotenv": "^16.0.3"
+    "node-telegram-bot-api": "^0.54.0",
+    "ws": "^8.5.0"
   }
 }
