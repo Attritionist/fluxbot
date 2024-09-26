@@ -522,7 +522,7 @@ async function handleSwapEvent(event) {
   console.log(`[${new Date().toISOString()}] Transaction ${txHash} marked as processed.`);
 
   try {
-    console.log('Received Swap event:', JSON.stringify(event, null, 2));
+    console.log('Received Swap event:', JSON.stringify(event, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2));
 
     const txReceipt = await provider.getTransactionReceipt(txHash);
     const fromAddress = txReceipt.from;
@@ -619,7 +619,6 @@ async function handleSwapEvent(event) {
   }
 }
 
-// Modify the initializeEventListeners function
 function initializeEventListeners() {
   if (listenersAttached) {
     console.log('Event listeners already attached. Skipping re-attachment.');
@@ -645,7 +644,7 @@ function initializeEventListeners() {
         amount1: ethers.toBigInt('0x' + log.data.slice(66, 130)),
         sqrtPriceX96: ethers.toBigInt('0x' + log.data.slice(130, 194)),
         liquidity: ethers.toBigInt('0x' + log.data.slice(194, 258)),
-        tick: ethers.toNumber(ethers.toBigInt('0x' + log.data.slice(258, 322)))
+        tick: parseInt(log.data.slice(258, 322), 16)  // Parse as integer instead of using toBigInt
       },
       transactionHash: log.transactionHash,
       address: log.address
@@ -656,6 +655,7 @@ function initializeEventListeners() {
   listenersAttached = true;
   console.log('Alchemy SDK is now listening for Swap events.');
 }
+
 
 // YANG-Specific Functions
 async function updateYangTotalBurnedAmount() {
