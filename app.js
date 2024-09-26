@@ -27,21 +27,25 @@ const YIN_TOKEN_DECIMALS = 8;
 const YANG_INITIAL_SUPPLY = 2500000;
 const YANG_BURN_ANIMATION = "https://fluxonbase.com/burn.jpg";
 
-// Initialize Telegram bot
-const yangBot = new TelegramBot(YANG_TELEGRAM_BOT_TOKEN, { polling: true });
+// Initialize Telegram bot with cancellation enabled
+const yangBot = new TelegramBot(YANG_TELEGRAM_BOT_TOKEN, { 
+  polling: true,
+  cancelTrigger: (message) => message.text === '/cancel'
+});
 
 // Alchemy SDK Configuration
 const settings = {
-  apiKey: process.env.ALCHEMY_API_KEY,
+  apiKey: ALCHEMY_API_KEY,
   network: Network.BASE_MAINNET,
 };
 
 // Initialize Alchemy SDK
 const alchemy = new Alchemy(settings);
 
-// Initialize Providers and Contracts with Alchemy's provider
-const provider = alchemy.config.getProvider(); // Alchemy's Ethers.js provider
+// Initialize provider and wallet
+const provider = alchemy.config.getProvider();
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+
 const ERC20_ABI = [
   {
     "inputs": [
