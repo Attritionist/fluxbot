@@ -812,7 +812,7 @@ async function reportYangBurn(burnedAmount, previousTotalSupply) {
   const fluxData = await getFluxData();
   const currentPrice = fluxData ? fluxData.yangPrice : await getCurrentYangPrice();
 
-  const burnMessage = `YANG Burned!\n\n☀️☀️☀️☀️☀️\n🔥 Burned: ${burnedAmount.toFixed(8)} YANG (${newlyBurnedPercent.toFixed(4)}%)\n🔥 Total Burned: ${yangTotalBurnedAmount.toFixed(8)} YANG\n🔥 Percent Burned: ${percentBurned.toFixed(2)}%\n☯️ YANG to YIN ratio: ${currentPrice}`;
+  const burnMessage = `YANG Burned!\n\n☀️☀️☀️☀️☀️\n🔥 Burned: ${burnedAmount.toFixed(4)} YANG (${newlyBurnedPercent.toFixed(6)}%)\n🔥 Total Burned: ${yangTotalBurnedAmount.toFixed(4)} YANG\n🔥 Percent Burned: ${percentBurned.toFixed(3)}%\n☯️ YANG to YIN ratio: ${currentPrice.toFixed(4}`;
 
   const burnAnimationMessageOptions = {
     caption: burnMessage,
