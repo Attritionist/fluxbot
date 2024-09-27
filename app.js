@@ -665,12 +665,19 @@ async function handleSwapEvent(event) {
     const txHashLink = `https://basescan.org/tx/${txHash}`;
     const chartLink = 'https://dexscreener.com/base/0xeCb36fF12cbe4710E9Be2411de46E6C180a4807f';
 
+    // Ensure burnedAmount is a number
+    const burnedAmountNumber = typeof burnedAmount === 'number' ? burnedAmount : parseFloat(burnedAmount);
+    if (isNaN(burnedAmountNumber)) {
+      console.error("burnedAmount is not a valid number:", burnedAmount);
+      return;
+    }
+
     const message = `${emojiString}
 💸 Bought ${yinAmount.toFixed(2)} YIN (${yangEquivalent.toFixed(2)} YANG) ($${transactionValueUSD.toFixed(2)}) (<a href="https://debank.com/profile/${fromAddress}">View Address</a>)
 ☯️ YIN Price: $${currentYinUsdPrice.toFixed(5)}
 💰 Total Market Cap (YIN + YANG): $${totalMarketCap.toFixed(0)}
-🔥 Total Burned: ${burnedAmount} YANG
-🔥 Percent Burned: ${(burnedAmount / YANG_INITIAL_SUPPLY * 100).toFixed(3)}%
+🔥 Total Burned: ${burnedAmountNumber.toFixed(4)} YANG
+🔥 Percent Burned: ${(burnedAmountNumber / YANG_INITIAL_SUPPLY * 100).toFixed(3)}%
 <a href="${chartLink}">📈 Chart</a>
 <a href="${txHashLink}">💱 TX Hash</a>
 ⚖️ Total YANG Balance: ${totalYangBalance.toFixed(2)}
@@ -695,6 +702,7 @@ async function handleSwapEvent(event) {
     console.error('Error in handleSwapEvent:', error);
   }
 }
+
 
 const iface = new ethers.utils.Interface(UNISWAP_V3_POOL_ABI);
 const swapEventSignature = ethers.utils.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
