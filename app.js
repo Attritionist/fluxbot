@@ -33,20 +33,23 @@ const yangBot = new TelegramBot(YANG_TELEGRAM_BOT_TOKEN, {
   polling: true
 });
 
-// Alchemy SDK Configuration
-const settings = {
+
+const alchemySettings = {
   apiKey: ALCHEMY_API_KEY,
   network: Network.BASE_MAINNET,
 };
 
-// Initialize Alchemy SDK
-const alchemy = new Alchemy(settings);
+const alchemy = new Alchemy(alchemySettings);
 
-// Use alchemy.core as the provider
-const provider = alchemy.config.getProvider();
+// ------------------------
+// Initialize Ethers.js Provider and Wallet
+// ------------------------
 
-// Initialize wallet
-const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+// Initialize Ethers.js provider using JsonRpcProvider
+const ethersProvider = new ethers.providers.JsonRpcProvider(RPC_URL);
+
+// Initialize Wallet with Ethers.js provider
+const wallet = new ethers.Wallet(PRIVATE_KEY, ethersProvider);
 
 const ERC20_ABI = [
   {
@@ -227,9 +230,9 @@ const YANG_ABI = [
 
 // Initialize Contracts
 const yangContract = new ethers.Contract(YANG_CONTRACT_ADDRESS, YANG_ABI, wallet);
-const yinToken = new ethers.Contract(YIN_CONTRACT_ADDRESS, ERC20_ABI, provider);
-const yangToken = new ethers.Contract(YANG_CONTRACT_ADDRESS, ERC20_ABI, provider);
-const yinPool = new ethers.Contract(YIN_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, provider);
+const yinToken = new ethers.Contract(YIN_CONTRACT_ADDRESS, ERC20_ABI, ethersProvider);
+const yangToken = new ethers.Contract(YANG_CONTRACT_ADDRESS, ERC20_ABI, ethersProvider);
+const yinPool = new ethers.Contract(YIN_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, ethersProvider);
 
 // State Variables
 let yangTotalBurnedAmount = 0;
@@ -301,7 +304,7 @@ function resetProcessedTransactions() {
 // **Your getOptimizedGasPrice Function**
 async function getOptimizedGasPrice() {
   try {
-    const gasPrice = await provider.getGasPrice();
+    const gasPrice = await ethersProvider.getGasPrice();
     return gasPrice.mul(110).div(100); // 110% of current gas price
   } catch (error) {
     console.error('Error fetching gas price:', error);
@@ -571,13 +574,13 @@ async function handleSwapEvent(event) {
       JSON.stringify(event, (_, v) => (ethers.BigNumber.isBigNumber(v) ? v.toString() : v), 2)
     );
 
-    const txReceipt = await provider.getTransactionReceipt(txHash);
+    const txReceipt = await ethersProvider.getTransactionReceipt(txHash);
     const fromAddress = txReceipt.from;
     const recipient = event.args.recipient;
     console.log(`Transaction initiator: ${fromAddress}`);
     console.log(`Recipient: ${recipient}`);
 
-    const pool = new ethers.Contract(event.address, UNISWAP_V3_POOL_ABI, provider);
+    const pool = new ethers.Contract(event.address, UNISWAP_V3_POOL_ABI, ethersProvider);
 
     const amount0 = event.args.amount0; // BigNumber
     const amount1 = event.args.amount1; // BigNumber
