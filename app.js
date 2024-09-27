@@ -741,27 +741,35 @@ async function updateYangTotalBurnedAmount() {
   }
 }
 
-async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000) {
+async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000n) {
   let retries = 0;
   while (retries < maxRetries) {
     try {
       console.log('Estimating gas for YANG doBurn...');
-      const gasEstimate = await yangContract.estimateGas.doBurn();
+      const gasEstimate = await yangContract.doBurn.estimateGas();
       console.log(`Estimated gas: ${gasEstimate.toString()}`);
 
-      const optimizedGasPrice = await getOptimizedGasPrice();
-      console.log(`Optimized Gas Price: ${optimizedGasPrice.toString()}`);
+      const feeData = await provider.getFeeData();
+      console.log(`Current maxFeePerGas: ${feeData.maxFeePerGas.toString()}`);
+
+      // Increase maxFeePerGas by 10% to ensure the transaction goes through
+      const optimizedMaxFeePerGas = feeData.maxFeePerGas * 110n / 100n;
+      console.log(`Optimized maxFeePerGas: ${optimizedMaxFeePerGas.toString()}`);
 
       console.log('Sending YANG doBurn transaction...');
-      const tx = await yangContract.doBurn({ gasLimit: gasEstimate, maxFeePerGas: optimizedGasPrice });
+      const tx = await yangContract.doBurn({
+        gasLimit: gasEstimate,
+        maxFeePerGas: optimizedMaxFeePerGas,
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas
+      });
       console.log(`Transaction sent: ${tx.hash}. Waiting for confirmation...`);
       const receipt = await tx.wait(2); // Wait for 2 confirmations
       console.log('YANG burn transaction successful:', receipt.transactionHash);
       return;
     } catch (error) {
-      console.error(`Error calling YANG doBurn (attempt ${retries + 1}):`, error.message);
+      console.error(`Error calling YANG doBurn (attempt ${retries + 1}):`, error);
       if (error.message.includes('network block skew detected')) {
-        const delay = initialDelay * BigInt(Math.pow(2, retries));
+        const delay = initialDelay * (2n ** BigInt(retries));
         console.log(`Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, Number(delay)));
         retries++;
