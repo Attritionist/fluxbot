@@ -1,6 +1,6 @@
 const axios = require("axios");
 const TelegramBot = require("node-telegram-bot-api");
-const ethers = require('ethers');
+const ethers = require('ethers'); // Ensure this is Ethers.js v5
 const fs = require('fs');
 require("dotenv").config();
 const { Alchemy, Network } = require("alchemy-sdk");
@@ -28,13 +28,10 @@ const YIN_TOKEN_DECIMALS = 8;
 const YANG_INITIAL_SUPPLY = 2500000;
 const YANG_BURN_ANIMATION = "https://fluxonbase.com/burn.jpg";
 
-
 // Initialize Telegram bot with cancellation enabled
 const yangBot = new TelegramBot(YANG_TELEGRAM_BOT_TOKEN, { 
-  polling: true,
-  cancelTrigger: (message) => message.text === '/cancel'
+  polling: true
 });
-
 
 // Alchemy SDK Configuration
 const settings = {
@@ -46,7 +43,7 @@ const settings = {
 const alchemy = new Alchemy(settings);
 
 // Use alchemy.core as the provider
-const provider = alchemy.core;
+const provider = alchemy.config.getProvider();
 
 // Initialize wallet
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
@@ -282,7 +279,7 @@ function saveProcessedTransactions() {
 const MAX_PROCESSED_TRANSACTIONS = 1000; // Adjust based on expected transaction volume
 function markTransactionAsProcessed(txHash) {
   if (processedTransactions.size >= MAX_PROCESSED_TRANSACTIONS) {
- const firstTx = processedTransactions.values().next().value;
+    const firstTx = processedTransactions.values().next().value;
     processedTransactions.delete(firstTx);
     console.log(`Removed oldest transaction: ${firstTx}`);
   }
@@ -301,23 +298,16 @@ function resetProcessedTransactions() {
   }
 }
 
+// **Your getOptimizedGasPrice Function**
 async function getOptimizedGasPrice() {
   try {
-    const feeData = await provider.getFeeData();
-    if (feeData.maxFeePerGas) {
-      // Calculate 110% of the current maxFeePerGas using BigInt
-      const optimizedGasPrice = feeData.maxFeePerGas * 110n / 100n;
-      return optimizedGasPrice;
-    } else {
-      // If maxFeePerGas is undefined, set a default value (e.g., 0.1 gwei)
-      return ethers.parseUnits('0.1', 'gwei'); // Returns BigInt in ethers v6
-    }
+    const gasPrice = await provider.getGasPrice();
+    return gasPrice.mul(110).div(100); // 110% of current gas price
   } catch (error) {
     console.error('Error fetching gas price:', error);
-    return ethers.parseUnits('0.1', 'gwei'); // Returns BigInt in ethers v6
+    return ethers.utils.parseUnits('0.1', 'gwei');
   }
 }
-
 
 function getFluxRank(yangBalance) {
   const FLUX_RANKS = {
@@ -434,6 +424,7 @@ function addToYangBurnQueue(photo, options) {
   yangMessageQueue.push({ photo, options });
   sendYangBurnFromQueue();
 }
+
 async function sendYangMessageFromQueue() {
   if (yangMessageQueue.length > 0 && !isYangSendingMessage) {
     isYangSendingMessage = true;
@@ -443,7 +434,8 @@ async function sendYangMessageFromQueue() {
       console.log(`[${new Date().toISOString()}] FLUX photo message sent successfully.`);
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Error sending FLUX message:`, error);
-      // Optionally, you might want to re-queue the message or handle the error differently
+      // Optionally, re-queue the message
+      yangMessageQueue.unshift(message);
     } finally {
       setTimeout(() => {
         isYangSendingMessage = false;
@@ -464,6 +456,8 @@ async function sendYangBurnFromQueue() {
       console.log(`[${new Date().toISOString()}] YANG burn message sent and pinned successfully.`);
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Error sending or pinning YANG message:`, error);
+      // Optionally, re-queue the message
+      yangMessageQueue.unshift(message);
     }
     setTimeout(() => {
       isYangSendingMessage = false;
@@ -544,19 +538,20 @@ async function getFluxData() {
   }
 }
 
-function absBigInt(x) {
-  return x < 0n ? -x : x;
+function absBigNumber(x) {
+  return x.lt(0) ? x.mul(-1) : x;
 }
 
 async function getYangBalance(address) {
   try {
     const balance = await yangToken.balanceOf(address);
-    return Number(ethers.formatUnits(balance, YANG_TOKEN_DECIMALS));
+    return parseFloat(ethers.utils.formatUnits(balance, YANG_TOKEN_DECIMALS));
   } catch (error) {
     console.error("Error fetching YANG balance:", error);
     return 0;
   }
 }
+
 async function handleSwapEvent(event) {
   console.log(`[${new Date().toISOString()}] Processing Swap event: ${event.transactionHash}`);
 
@@ -573,7 +568,7 @@ async function handleSwapEvent(event) {
   try {
     console.log(
       'Received Swap event:',
-      JSON.stringify(event, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2)
+      JSON.stringify(event, (_, v) => (ethers.BigNumber.isBigNumber(v) ? v.toString() : v), 2)
     );
 
     const txReceipt = await provider.getTransactionReceipt(txHash);
@@ -584,8 +579,8 @@ async function handleSwapEvent(event) {
 
     const pool = new ethers.Contract(event.address, UNISWAP_V3_POOL_ABI, provider);
 
-    const amount0 = event.args.amount0; // Already signed BigInt
-    const amount1 = event.args.amount1; // Already signed BigInt
+    const amount0 = event.args.amount0; // BigNumber
+    const amount1 = event.args.amount1; // BigNumber
 
     const token0Address = await pool.token0();
     const token1Address = await pool.token1();
@@ -605,16 +600,16 @@ async function handleSwapEvent(event) {
     }
 
     // Process only YIN buys (negative tokenAmount)
-    if (!isYinBuy || tokenAmount >= 0n) {
+    if (!isYinBuy || tokenAmount.gte(0)) {
       console.log(
-        `Skipping transaction ${txHash}: isYinBuy=${isYinBuy}, isSell=${tokenAmount >= 0n}`
+        `Skipping transaction ${txHash}: isYinBuy=${isYinBuy}, isSell=${tokenAmount.gte(0)}`
       );
       return;
     } else {
       console.log(`Processing Buy transaction ${txHash}: tokenAmount=${tokenAmount.toString()}`);
     }
 
-    const formattedAmount = ethers.formatUnits(absBigInt(tokenAmount), tokenDecimals);
+    const formattedAmount = parseFloat(ethers.utils.formatUnits(absBigNumber(tokenAmount), tokenDecimals));
     console.log(`Formatted Token amount: ${formattedAmount}`);
 
     const fluxData = await getFluxData();
@@ -695,9 +690,8 @@ async function handleSwapEvent(event) {
   }
 }
 
-
-const iface = new ethers.Interface(UNISWAP_V3_POOL_ABI);
-const swapEventSignature = ethers.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
+const iface = new ethers.utils.Interface(UNISWAP_V3_POOL_ABI);
+const swapEventSignature = ethers.utils.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
 
 alchemy.ws.on({
   address: YIN_POOL_ADDRESS,
@@ -741,26 +735,21 @@ async function updateYangTotalBurnedAmount() {
   }
 }
 
-async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000n) {
+async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000) {
   let retries = 0;
   while (retries < maxRetries) {
     try {
       console.log('Estimating gas for YANG doBurn...');
-      const gasEstimate = await yangContract.doBurn.estimateGas();
+      const gasEstimate = await yangContract.estimateGas.doBurn();
       console.log(`Estimated gas: ${gasEstimate.toString()}`);
 
-      const feeData = await provider.getFeeData();
-      console.log(`Current maxFeePerGas: ${feeData.maxFeePerGas.toString()}`);
-
-      // Increase maxFeePerGas by 10% to ensure the transaction goes through
-      const optimizedMaxFeePerGas = feeData.maxFeePerGas * 110n / 100n;
-      console.log(`Optimized maxFeePerGas: ${optimizedMaxFeePerGas.toString()}`);
+      const gasPrice = await getOptimizedGasPrice();
+      console.log(`Optimized Gas Price: ${ethers.utils.formatUnits(gasPrice, 'gwei')} gwei`);
 
       console.log('Sending YANG doBurn transaction...');
       const tx = await yangContract.doBurn({
         gasLimit: gasEstimate,
-        maxFeePerGas: optimizedMaxFeePerGas,
-        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas
+        gasPrice: gasPrice
       });
       console.log(`Transaction sent: ${tx.hash}. Waiting for confirmation...`);
       const receipt = await tx.wait(2); // Wait for 2 confirmations
@@ -769,9 +758,9 @@ async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000n) {
     } catch (error) {
       console.error(`Error calling YANG doBurn (attempt ${retries + 1}):`, error);
       if (error.message.includes('network block skew detected')) {
-        const delay = initialDelay * (2n ** BigInt(retries));
+        const delay = initialDelay * Math.pow(2, retries);
         console.log(`Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, Number(delay)));
+        await new Promise(resolve => setTimeout(resolve, delay));
         retries++;
       } else {
         throw error;
@@ -781,11 +770,10 @@ async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000n) {
   throw new Error('Max retries reached for YANG doBurn');
 }
 
-
 async function getCurrentYangPrice() {
   try {
     const price = await yangContract.getCurrentPrice();
-    return (price / 10**YANG_TOKEN_DECIMALS).toFixed(4);
+    return (price.toNumber() / 10**YANG_TOKEN_DECIMALS).toFixed(4);
   } catch (error) {
     console.error("Error getting current YANG price:", error);
     return null;
@@ -886,7 +874,7 @@ async function initializeAndStart() {
 process.on('SIGINT', async () => {
   console.log('Gracefully shutting down...');
   try {
-    await alchemy.ws.removeAllListeners();
+    alchemy.ws.removeAllListeners();
     console.log('Removed all Alchemy listeners.');
     resetProcessedTransactions();
     console.log('Processed transactions reset.');
@@ -900,7 +888,7 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
   console.log('Gracefully shutting down...');
   try {
-    await alchemy.ws.removeAllListeners();
+    alchemy.ws.removeAllListeners();
     console.log('Removed all Alchemy listeners.');
     resetProcessedTransactions();
     console.log('Processed transactions reset.');
