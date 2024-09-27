@@ -502,7 +502,6 @@ async function getFluxData() {
 
   try {
     const response = await axios.get(FLUX_API_ENDPOINT);
-    // Assuming the API returns { yangPrice, circulatingSupply, burnedAmount }
     const { yangPrice, circulatingSupply, burnedAmount } = response.data;
 
     if (
@@ -522,7 +521,11 @@ async function getFluxData() {
     console.log(
       `Updated cached Flux data: yangPrice=${cachedYangPrice}, circulatingSupply=${cachedCirculatingSupply}, burnedAmount=${cachedBurnedAmount}`
     );
-    return response.data;
+    return {
+      yangPrice: cachedYangPrice,
+      circulatingSupply: cachedCirculatingSupply,
+      burnedAmount: cachedBurnedAmount,
+    };
   } catch (error) {
     console.error('Error fetching Flux data:', error);
     if (
@@ -776,12 +779,13 @@ async function doBurnWithRetry(maxRetries = 5, initialDelay = 1000) {
 async function getCurrentYangPrice() {
   try {
     const price = await yangContract.getCurrentPrice();
-    return (price.toNumber() / 10**YANG_TOKEN_DECIMALS).toFixed(4);
+    return price.toNumber() / 10**YANG_TOKEN_DECIMALS; // Return as number
   } catch (error) {
     console.error("Error getting current YANG price:", error);
     return null;
   }
 }
+
 
 async function checkYangTotalSupply() {
   try {
@@ -810,9 +814,20 @@ async function reportYangBurn(burnedAmount, previousTotalSupply) {
   const newlyBurnedPercent = (burnedAmount / YANG_INITIAL_SUPPLY) * 100;
   
   const fluxData = await getFluxData();
-  const currentPrice = fluxData ? fluxData.yangPrice : await getCurrentYangPrice();
+  let currentPrice = null;
 
-  const burnMessage = `YANG Burned!\n\n☀️☀️☀️☀️☀️\n🔥 Burned: ${burnedAmount.toFixed(4)} YANG (${newlyBurnedPercent.toFixed(6)}%)\n🔥 Total Burned: ${yangTotalBurnedAmount.toFixed(4)} YANG\n🔥 Percent Burned: ${percentBurned.toFixed(3)}%\n☯️ YANG to YIN ratio: ${currentPrice.toFixed(4)}`;
+  if (fluxData) {
+    currentPrice = fluxData.yangPrice;
+  } else {
+    currentPrice = await getCurrentYangPrice();
+  }
+
+  if (currentPrice === null || typeof currentPrice !== 'number') {
+    console.error("Invalid currentPrice value:", currentPrice);
+    return; // Exit early or handle accordingly
+  }
+
+  const burnMessage = `YANG Burned!\n\n☀️☀️☀️☀️☀️\n🔥 Burned: ${burnedAmount.toFixed(4)} YANG (${newlyBurnedPercent.toFixed(6)}%)\n🔥 Total Burned: ${yangTotalBurnedAmount.toFixed(4)} YANG\n🔥 Percent Burned: ${(percentBurned).toFixed(3)}%\n☯️ YANG to YIN ratio: ${currentPrice.toFixed(4)}`;
 
   const burnAnimationMessageOptions = {
     caption: burnMessage,
@@ -821,6 +836,8 @@ async function reportYangBurn(burnedAmount, previousTotalSupply) {
 
   addToYangBurnQueue(YANG_BURN_ANIMATION, burnAnimationMessageOptions);
 }
+
+
 
 // Scheduler Functions
 function scheduleNextCall(callback, delay) {
