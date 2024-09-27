@@ -9,7 +9,7 @@
   "dependencies": {
     "axios": "^0.21.1",
     "dotenv": "^16.4.5",
-    "ethers": "^6.13.2",
+    "ethers": "^5.7.2",
     "node-telegram-bot-api": "^0.66.0",
     "ws": "^8.18.0",
     "alchemy-sdk": "^3.4.1"
