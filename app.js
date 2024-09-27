@@ -279,7 +279,7 @@ function saveProcessedTransactions() {
   }
 }
 
-const MAX_PROCESSED_TRANSACTIONS = 1000; // Adjust based on expected transaction volume
+const MAX_PROCESSED_TRANSACTIONS = 100; // Adjust based on expected transaction volume
 function markTransactionAsProcessed(txHash) {
   if (processedTransactions.size >= MAX_PROCESSED_TRANSACTIONS) {
     const firstTx = processedTransactions.values().next().value;
