@@ -443,7 +443,7 @@ async function sendYangMessageFromQueue() {
       setTimeout(() => {
         isYangSendingMessage = false;
         sendYangMessageFromQueue(); // Process next message in queue, if any
-      }, 500);
+      }, 1000);
     }
   }
 }
@@ -465,7 +465,7 @@ async function sendYangBurnFromQueue() {
     setTimeout(() => {
       isYangSendingMessage = false;
       sendYangBurnFromQueue();
-    }, 500);
+    }, 1000);
   }
 }
 
